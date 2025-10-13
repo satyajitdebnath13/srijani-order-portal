@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-gray-100">
-    <!-- Mobile menu button -->
-    <div class="lg:hidden fixed top-4 left-4 z-50">
+    <!-- Mobile menu button - Top Right -->
+    <div class="lg:hidden fixed top-4 right-4 z-50">
       <button
         @click="mobileMenuOpen = !mobileMenuOpen"
         class="bg-white p-3 rounded-lg shadow-lg text-gray-600 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200"
@@ -13,10 +13,10 @@
       </button>
     </div>
 
-    <!-- Mobile menu overlay -->
+    <!-- Mobile menu overlay - Slide from Right -->
     <div v-if="mobileMenuOpen" class="lg:hidden fixed inset-0 z-40" @click="mobileMenuOpen = false">
       <div class="fixed inset-0 bg-gray-600 bg-opacity-75 transition-opacity"></div>
-      <div class="fixed inset-y-0 left-0 flex max-w-xs w-full" @click.stop>
+      <div class="fixed inset-y-0 right-0 flex max-w-xs w-full" @click.stop>
         <div class="relative flex-1 flex flex-col max-w-xs w-full bg-white shadow-xl">
           <div class="flex flex-col h-full">
             <!-- Logo -->

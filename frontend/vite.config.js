@@ -16,6 +16,16 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true
       }
+    },
+    // Enable SPA fallback for development
+    historyApiFallback: true
+  },
+  build: {
+    // Ensure proper SPA routing in production
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
     }
   }
 });

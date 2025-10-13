@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import db from './models/index.js';
 import logger from './utils/logger.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
@@ -18,6 +20,10 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Get __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Security middleware
 app.use(helmet());
@@ -88,7 +94,32 @@ app.use('/api/returns', returnRoutes);
 // Static files (for uploads, invoices, etc.)
 app.use('/uploads', express.static('uploads'));
 
-// 404 handler
+// Serve static files from the frontend dist directory
+const frontendDistPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendDistPath));
+
+// Handle SPA routing - serve index.html for all non-API routes
+app.get('*', (req, res, next) => {
+  // Skip API routes
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  
+  // Skip health check
+  if (req.path === '/health') {
+    return next();
+  }
+  
+  // Skip uploads
+  if (req.path.startsWith('/uploads/')) {
+    return next();
+  }
+  
+  // Serve index.html for all other routes (SPA fallback)
+  res.sendFile(path.join(frontendDistPath, 'index.html'));
+});
+
+// 404 handler (for API routes only)
 app.use(notFound);
 
 // Error handling middleware
