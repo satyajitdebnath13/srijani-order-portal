@@ -16,7 +16,10 @@
           </div>
           <div class="ml-4">
             <p class="text-sm font-medium text-gray-600">Total Orders</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ stats.totalOrders }}</p>
+            <p class="text-2xl font-semibold text-gray-900">
+              <span v-if="loading" class="animate-pulse bg-gray-200 h-8 w-16 rounded"></span>
+              <span v-else>{{ stats.totalOrders }}</span>
+            </p>
           </div>
         </div>
       </div>
@@ -30,7 +33,10 @@
           </div>
           <div class="ml-4">
             <p class="text-sm font-medium text-gray-600">Total Customers</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ stats.totalCustomers }}</p>
+            <p class="text-2xl font-semibold text-gray-900">
+              <span v-if="loading" class="animate-pulse bg-gray-200 h-8 w-16 rounded"></span>
+              <span v-else>{{ stats.totalCustomers }}</span>
+            </p>
           </div>
         </div>
       </div>
@@ -44,7 +50,10 @@
           </div>
           <div class="ml-4">
             <p class="text-sm font-medium text-gray-600">Support Tickets</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ stats.totalTickets }}</p>
+            <p class="text-2xl font-semibold text-gray-900">
+              <span v-if="loading" class="animate-pulse bg-gray-200 h-8 w-16 rounded"></span>
+              <span v-else>{{ stats.totalTickets }}</span>
+            </p>
           </div>
         </div>
       </div>
@@ -58,7 +67,10 @@
           </div>
           <div class="ml-4">
             <p class="text-sm font-medium text-gray-600">Returns</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ stats.totalReturns }}</p>
+            <p class="text-2xl font-semibold text-gray-900">
+              <span v-if="loading" class="animate-pulse bg-gray-200 h-8 w-16 rounded"></span>
+              <span v-else>{{ stats.totalReturns }}</span>
+            </p>
           </div>
         </div>
       </div>
@@ -71,7 +83,19 @@
           <h3 class="text-lg font-medium text-gray-900">Recent Orders</h3>
         </div>
         <div class="p-6">
-          <div v-if="recentOrders.length === 0" class="text-center text-gray-500 py-8">
+          <div v-if="loading" class="space-y-4">
+            <div v-for="n in 3" :key="n" class="flex items-center justify-between">
+              <div>
+                <div class="animate-pulse bg-gray-200 h-4 w-24 rounded mb-2"></div>
+                <div class="animate-pulse bg-gray-200 h-3 w-32 rounded"></div>
+              </div>
+              <div class="text-right">
+                <div class="animate-pulse bg-gray-200 h-6 w-16 rounded mb-2"></div>
+                <div class="animate-pulse bg-gray-200 h-3 w-12 rounded"></div>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="recentOrders.length === 0" class="text-center text-gray-500 py-8">
             No recent orders
           </div>
           <div v-else class="space-y-4">
@@ -96,7 +120,18 @@
           <h3 class="text-lg font-medium text-gray-900">Recent Support Tickets</h3>
         </div>
         <div class="p-6">
-          <div v-if="recentTickets.length === 0" class="text-center text-gray-500 py-8">
+          <div v-if="loading" class="space-y-4">
+            <div v-for="n in 3" :key="n" class="flex items-center justify-between">
+              <div>
+                <div class="animate-pulse bg-gray-200 h-4 w-32 rounded mb-2"></div>
+                <div class="animate-pulse bg-gray-200 h-3 w-24 rounded"></div>
+              </div>
+              <div class="text-right">
+                <div class="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="recentTickets.length === 0" class="text-center text-gray-500 py-8">
             No recent tickets
           </div>
           <div v-else class="space-y-4">
@@ -126,6 +161,7 @@ import { ordersAPI, supportAPI } from '@/services/api'
 const authStore = useAuthStore()
 const user = ref(authStore.user)
 
+const loading = ref(true)
 const stats = ref({
   totalOrders: 0,
   totalCustomers: 0,
@@ -158,19 +194,37 @@ const getPriorityClass = (priority) => {
 
 const loadDashboardData = async () => {
   try {
+    loading.value = true
+    
     // Load dashboard statistics
     const statsResponse = await ordersAPI.getStats()
-    stats.value = statsResponse.data
+    stats.value = statsResponse.data.stats || {
+      totalOrders: 0,
+      totalCustomers: 0,
+      totalTickets: 0,
+      totalReturns: 0
+    }
 
     // Load recent orders
     const ordersResponse = await ordersAPI.getRecent()
-    recentOrders.value = ordersResponse.data
+    recentOrders.value = ordersResponse.data.orders || []
 
     // Load recent tickets
     const ticketsResponse = await supportAPI.getRecent()
-    recentTickets.value = ticketsResponse.data
+    recentTickets.value = ticketsResponse.data.tickets || []
   } catch (error) {
     console.error('Error loading dashboard data:', error)
+    // Ensure we show empty state on error
+    stats.value = {
+      totalOrders: 0,
+      totalCustomers: 0,
+      totalTickets: 0,
+      totalReturns: 0
+    }
+    recentOrders.value = []
+    recentTickets.value = []
+  } finally {
+    loading.value = false
   }
 }
 
