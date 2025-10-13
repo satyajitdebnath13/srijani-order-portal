@@ -1,0 +1,301 @@
+import db from '../models/index.js';
+import { generateToken } from '../utils/jwt.js';
+import { sendWelcomeEmail } from '../services/emailService.js';
+import logger from '../utils/logger.js';
+
+const { User, Customer, Address, ActivityLog } = db;
+
+export const register = async (req, res) => {
+  try {
+    const { email, password, name, phone, language_preference } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    // Create user
+    const user = await User.create({
+      email,
+      password,
+      name,
+      phone,
+      role: 'customer'
+    });
+
+    // Create customer profile
+    await Customer.create({
+      user_id: user.id,
+      language_preference: language_preference || 'en'
+    });
+
+    // Log activity
+    await ActivityLog.create({
+      user_id: user.id,
+      action: 'user_registered',
+      entity_type: 'user',
+      entity_id: user.id,
+      ip_address: req.ip
+    });
+
+    // Send welcome email
+    await sendWelcomeEmail(user);
+
+    // Generate token
+    const token = generateToken(user);
+
+    logger.info(`New user registered: ${email}`);
+
+    res.status(201).json({
+      message: 'Registration successful',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      },
+      token
+    });
+  } catch (error) {
+    logger.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+};
+
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Find user
+    const user = await User.findOne({ where: { email } });
+    
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check password
+    const isPasswordValid = await user.comparePassword(password);
+    
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check if user is active
+    if (!user.is_active) {
+      return res.status(403).json({ error: 'Account is inactive' });
+    }
+
+    // Update last login
+    await user.update({ last_login: new Date() });
+
+    // Log activity
+    await ActivityLog.create({
+      user_id: user.id,
+      action: 'user_login',
+      entity_type: 'user',
+      entity_id: user.id,
+      ip_address: req.ip
+    });
+
+    // Generate token
+    const token = generateToken(user);
+
+    logger.info(`User logged in: ${email}`);
+
+    res.json({
+      message: 'Login successful',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      },
+      token
+    });
+  } catch (error) {
+    logger.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      attributes: { exclude: ['password'] },
+      include: [
+        {
+          model: Customer,
+          as: 'customerProfile',
+          required: false
+        }
+      ]
+    });
+
+    res.json({ user });
+  } catch (error) {
+    logger.error('Get user error:', error);
+    res.status(500).json({ error: 'Failed to get user data' });
+  }
+};
+
+export const updateProfile = async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+    
+    await req.user.update({ name, phone });
+
+    // Log activity
+    await ActivityLog.create({
+      user_id: req.user.id,
+      action: 'profile_updated',
+      entity_type: 'user',
+      entity_id: req.user.id,
+      ip_address: req.ip
+    });
+
+    res.json({ 
+      message: 'Profile updated successfully',
+      user: req.user
+    });
+  } catch (error) {
+    logger.error('Update profile error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+};
+
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    // Verify current password
+    const isPasswordValid = await req.user.comparePassword(currentPassword);
+    
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // Update password
+    await req.user.update({ password: newPassword });
+
+    // Log activity
+    await ActivityLog.create({
+      user_id: req.user.id,
+      action: 'password_changed',
+      entity_type: 'user',
+      entity_id: req.user.id,
+      ip_address: req.ip
+    });
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    logger.error('Change password error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+};
+
+export const getAddresses = async (req, res) => {
+  try {
+    // For customers, get their addresses
+    if (req.user.role === 'customer') {
+      const customer = await Customer.findOne({ where: { user_id: req.user.id } });
+      if (!customer) {
+        return res.status(404).json({ error: 'Customer profile not found' });
+      }
+
+      const addresses = await Address.findAll({
+        where: { customer_id: customer.id },
+        order: [['created_at', 'DESC']]
+      });
+
+      res.json({ addresses });
+    } else {
+      // For admins, return empty array or all addresses if needed
+      res.json({ addresses: [] });
+    }
+  } catch (error) {
+    logger.error('Get addresses error:', error);
+    res.status(500).json({ error: 'Failed to get addresses' });
+  }
+};
+
+export const getAllCustomers = async (req, res) => {
+  try {
+    const { search, status, sortBy, page = 1, limit = 20 } = req.query;
+    const offset = (page - 1) * limit;
+
+    // Build where clause
+    const whereClause = {};
+    if (status) {
+      whereClause.is_active = status === 'active';
+    }
+
+    // Build user where clause for search
+    const userWhereClause = {};
+    if (search) {
+      userWhereClause[db.Sequelize.Op.or] = [
+        { name: { [db.Sequelize.Op.iLike]: `%${search}%` } },
+        { email: { [db.Sequelize.Op.iLike]: `%${search}%` } }
+      ];
+    }
+
+    // Build order clause
+    let orderClause = [['created_at', 'DESC']];
+    if (sortBy) {
+      switch (sortBy) {
+        case 'name':
+          orderClause = [[{ model: User, as: 'user' }, 'name', 'ASC']];
+          break;
+        case 'total_orders':
+          orderClause = [['total_orders', 'DESC']];
+          break;
+        case 'total_spent':
+          orderClause = [['total_spent', 'DESC']];
+          break;
+        default:
+          orderClause = [['created_at', 'DESC']];
+      }
+    }
+
+    const customers = await Customer.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'user',
+          where: userWhereClause,
+          attributes: ['id', 'name', 'email', 'phone', 'is_active', 'created_at']
+        }
+      ],
+      order: orderClause,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    // Calculate stats
+    const totalCustomers = await Customer.count();
+    const activeCustomers = await Customer.count({ 
+      include: [{ model: User, as: 'user', where: { is_active: true } }] 
+    });
+    const totalRevenue = await Customer.sum('total_spent') || 0;
+
+    res.json({
+      customers: customers.rows,
+      pagination: {
+        total: customers.count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(customers.count / limit)
+      },
+      stats: {
+        totalCustomers,
+        activeCustomers,
+        totalRevenue
+      }
+    });
+  } catch (error) {
+    logger.error('Get all customers error:', error);
+    res.status(500).json({ error: 'Failed to get customers' });
+  }
+};
+
