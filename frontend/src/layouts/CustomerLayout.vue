@@ -11,7 +11,7 @@
             <!-- Mobile menu button -->
             <button
               @click="mobileMenuOpen = !mobileMenuOpen"
-              class="ml-4 lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              class="ml-4 lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200"
             >
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path v-if="!mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -50,12 +50,12 @@
           
           <!-- User Actions -->
           <div class="flex items-center space-x-2 sm:space-x-4">
-            <router-link to="/profile" class="text-gray-700 hover:text-primary-600 p-2 rounded-md hover:bg-gray-100">
+            <router-link to="/profile" class="text-gray-700 hover:text-primary-600 p-2 rounded-md hover:bg-gray-100 transition-colors">
               <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </router-link>
-            <button @click="handleLogout" class="text-gray-700 hover:text-primary-600 p-2 rounded-md hover:bg-gray-100">
+            <button @click="handleLogout" class="text-gray-700 hover:text-primary-600 p-2 rounded-md hover:bg-gray-100 transition-colors">
               <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
@@ -65,13 +65,16 @@
       </div>
       
       <!-- Mobile Navigation Menu -->
-      <div v-if="mobileMenuOpen" class="lg:hidden border-t border-gray-200 bg-white">
+      <div v-if="mobileMenuOpen" class="lg:hidden border-t border-gray-200 bg-white shadow-lg">
         <div class="container-responsive py-4 space-y-2">
           <router-link 
             to="/dashboard" 
             :class="['mobile-nav-link', { 'mobile-nav-link-active': $route.path === '/dashboard' }]"
             @click="mobileMenuOpen = false"
           >
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
             Dashboard
           </router-link>
           <router-link 
@@ -79,6 +82,9 @@
             :class="['mobile-nav-link', { 'mobile-nav-link-active': $route.path.startsWith('/orders') }]"
             @click="mobileMenuOpen = false"
           >
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
             My Orders
           </router-link>
           <router-link 
@@ -86,6 +92,9 @@
             :class="['mobile-nav-link', { 'mobile-nav-link-active': $route.path.startsWith('/support') }]"
             @click="mobileMenuOpen = false"
           >
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
             Support
           </router-link>
           <router-link 
@@ -93,6 +102,9 @@
             :class="['mobile-nav-link', { 'mobile-nav-link-active': $route.path.startsWith('/returns') }]"
             @click="mobileMenuOpen = false"
           >
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
             Returns
           </router-link>
         </div>
@@ -159,7 +171,7 @@ const handleLogout = () => {
 }
 
 .mobile-nav-link {
-  @apply block px-3 py-2 text-sm text-gray-700 hover:text-primary-600 hover:bg-primary-50 rounded-md transition-colors duration-200;
+  @apply flex items-center px-3 py-3 text-sm text-gray-700 hover:text-primary-600 hover:bg-primary-50 rounded-md transition-colors duration-200;
 }
 
 .mobile-nav-link-active {
