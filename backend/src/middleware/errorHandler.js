@@ -4,9 +4,13 @@ export const errorHandler = (err, req, res, next) => {
   logger.error('Error:', {
     message: err.message,
     stack: err.stack,
+    name: err.name,
     url: req.url,
     method: req.method,
-    ip: req.ip
+    ip: req.ip,
+    body: req.body,
+    headers: req.headers,
+    user: req.user?.id
   });
 
   // Sequelize validation errors

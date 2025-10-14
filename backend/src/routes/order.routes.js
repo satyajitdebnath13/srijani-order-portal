@@ -33,6 +33,40 @@ const createOrderValidation = [
   })
 ];
 
+// Health check endpoint
+router.get('/health', async (req, res) => {
+  try {
+    const db = await import('../models/index.js');
+    await db.default.sequelize.authenticate();
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      database: 'disconnected',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Debug endpoint
+router.post('/debug', authenticate, authorize('admin'), (req, res) => {
+  try {
+    res.json({
+      message: 'Debug endpoint working',
+      user: req.user,
+      body: req.body,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message, stack: error.stack });
+  }
+});
+
 // Routes
 router.post('/', authenticate, authorize('admin'), createOrderValidation, createOrder);
 router.post('/:orderId/approve', authenticate, approveOrder);
