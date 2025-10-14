@@ -35,8 +35,19 @@ const sendEmail = async (to, subject, html, template = null) => {
       subject: subject,
       htmlContent: html,
       sender: {
-        name: process.env.EMAIL_FROM_NAME || 'Srijani',
-        email: process.env.EMAIL_FROM_EMAIL || 'noreply@srijani.com'
+        name: process.env.EMAIL_FROM_NAME || 'Srijani Order Portal',
+        email: process.env.EMAIL_FROM_EMAIL || 'orders@srijani.com'
+      },
+      // Add headers for better deliverability
+      headers: {
+        'X-Mailer': 'Srijani Order Portal',
+        'X-Priority': '3',
+        'X-MSMail-Priority': 'Normal'
+      },
+      // Add reply-to for better engagement
+      replyTo: {
+        email: process.env.EMAIL_REPLY_TO || 'support@srijani.com',
+        name: 'Srijani Support'
       }
     };
 
@@ -77,21 +88,96 @@ const sendEmail = async (to, subject, html, template = null) => {
 const getEmailWrapper = (content) => {
   return `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Srijani Order Portal</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>Srijani Order Portal - Order Confirmation</title>
     <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #2c3e50; color: white; padding: 20px; text-align: center; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .footer { background-color: #34495e; color: white; padding: 15px; text-align: center; font-size: 12px; }
-        .button { display: inline-block; background-color: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
-        .order-details { background-color: white; padding: 15px; border-radius: 5px; margin: 15px 0; }
-        .item-row { border-bottom: 1px solid #eee; padding: 10px 0; }
-        .total { font-weight: bold; font-size: 18px; color: #2c3e50; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            line-height: 1.6; 
+            color: #333333; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #f4f4f4;
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header { 
+            background-color: #2563eb; 
+            color: white; 
+            padding: 30px 20px; 
+            text-align: center; 
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .content { 
+            padding: 30px 20px; 
+            background-color: #ffffff; 
+        }
+        .footer { 
+            background-color: #f8f9fa; 
+            color: #6b7280; 
+            padding: 20px; 
+            text-align: center; 
+            font-size: 12px; 
+            border-top: 1px solid #e5e7eb;
+        }
+        .button { 
+            display: inline-block; 
+            background-color: #2563eb; 
+            color: white; 
+            padding: 12px 24px; 
+            text-decoration: none; 
+            border-radius: 6px; 
+            margin: 15px 0; 
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .button:hover {
+            background-color: #1d4ed8;
+        }
+        .order-details { 
+            background-color: #f8f9fa; 
+            padding: 20px; 
+            border-radius: 6px; 
+            margin: 20px 0; 
+            border: 1px solid #e5e7eb;
+        }
+        .item-row { 
+            border-bottom: 1px solid #e5e7eb; 
+            padding: 12px 0; 
+        }
+        .item-row:last-child {
+            border-bottom: none;
+        }
+        .total { 
+            font-weight: 600; 
+            font-size: 18px; 
+            color: #1f2937; 
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px solid #2563eb;
+        }
+        .text-muted {
+            color: #6b7280;
+        }
+        .unsubscribe {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 15px;
+        }
     </style>
 </head>
 <body>
@@ -103,8 +189,12 @@ const getEmailWrapper = (content) => {
             ${content}
         </div>
         <div class="footer">
-            <p>This email was sent from Srijani Order Portal</p>
-            <p>For support, contact: ${process.env.COMPANY_EMAIL || 'support@srijani.com'}</p>
+            <p><strong>Srijani Order Portal</strong></p>
+            <p>This is an automated email regarding your order. Please do not reply to this email.</p>
+            <p>For support, contact: <a href="mailto:${process.env.COMPANY_EMAIL || 'support@srijani.com'}" style="color: #2563eb;">${process.env.COMPANY_EMAIL || 'support@srijani.com'}</a></p>
+            <div class="unsubscribe">
+                <p>If you no longer wish to receive these emails, please contact our support team.</p>
+            </div>
         </div>
     </div>
 </body>
@@ -113,7 +203,7 @@ const getEmailWrapper = (content) => {
 
 // Order approval email for new customers (with login credentials)
 const sendOrderApprovalEmailWithCredentials = async (order, customer, orderItems, generatedPassword) => {
-  const subject = `Order Confirmation Required - ${order.order_number}`;
+  const subject = `Please confirm your order #${order.order_number} - Srijani`;
   
   const orderItemsHtml = orderItems.map(item => `
     <div class="item-row">
@@ -155,7 +245,7 @@ const sendOrderApprovalEmailWithCredentials = async (order, customer, orderItems
 
 // Order approval email for existing customers
 const sendOrderApprovalEmail = async (order, customer, orderItems) => {
-  const subject = `Order Confirmation Required - ${order.order_number}`;
+  const subject = `Please confirm your order #${order.order_number} - Srijani`;
   
   const orderItemsHtml = orderItems.map(item => `
     <div class="item-row">
