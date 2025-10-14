@@ -66,6 +66,63 @@ if (useNeonDB) {
           return options;
         }
         
+        // Hook support
+        static hooks = {
+          beforeSave: [],
+          afterSave: [],
+          beforeCreate: [],
+          afterCreate: [],
+          beforeUpdate: [],
+          afterUpdate: [],
+          beforeDestroy: [],
+          afterDestroy: []
+        };
+        
+        static addHook(hookType, callback) {
+          if (this.hooks[hookType]) {
+            this.hooks[hookType].push(callback);
+          }
+        }
+        
+        static beforeSave(callback) {
+          this.addHook('beforeSave', callback);
+        }
+        
+        static afterSave(callback) {
+          this.addHook('afterSave', callback);
+        }
+        
+        static beforeCreate(callback) {
+          this.addHook('beforeCreate', callback);
+        }
+        
+        static afterCreate(callback) {
+          this.addHook('afterCreate', callback);
+        }
+        
+        static beforeUpdate(callback) {
+          this.addHook('beforeUpdate', callback);
+        }
+        
+        static afterUpdate(callback) {
+          this.addHook('afterUpdate', callback);
+        }
+        
+        static beforeDestroy(callback) {
+          this.addHook('beforeDestroy', callback);
+        }
+        
+        static afterDestroy(callback) {
+          this.addHook('afterDestroy', callback);
+        }
+        
+        async runHooks(hookType, ...args) {
+          const hooks = this.constructor.hooks[hookType] || [];
+          for (const hook of hooks) {
+            await hook(...args);
+          }
+        }
+        
         // Static methods for database operations
         static async findAll(queryOptions = {}) {
           const query = `SELECT * FROM ${this.tableName}`;
@@ -79,11 +136,27 @@ if (useNeonDB) {
         }
         
         static async create(data) {
+          const instance = new this(data);
+          
+          // Run beforeCreate hooks
+          await instance.runHooks('beforeCreate', instance);
+          
+          // Run beforeSave hooks
+          await instance.runHooks('beforeSave', instance);
+          
           const columns = Object.keys(data).join(', ');
           const values = Object.values(data).map(v => `'${v}'`).join(', ');
           const query = `INSERT INTO ${this.tableName} (${columns}) VALUES (${values}) RETURNING *`;
           const result = await neonSql`${query}`;
-          return new this(result[0]);
+          const createdInstance = new this(result[0]);
+          
+          // Run afterCreate hooks
+          await createdInstance.runHooks('afterCreate', createdInstance);
+          
+          // Run afterSave hooks
+          await createdInstance.runHooks('afterSave', createdInstance);
+          
+          return createdInstance;
         }
         
         static async update(data, options) {
@@ -108,14 +181,30 @@ if (useNeonDB) {
         }
         
         async save() {
+          // Run beforeSave hooks
+          await this.runHooks('beforeSave', this);
+          
           // Implementation for saving instance
           const data = { ...this };
           delete data.id; // Remove id for update
-          return await this.constructor.update(data, { where: `id = '${this.id}'` });
+          const result = await this.constructor.update(data, { where: `id = '${this.id}'` });
+          
+          // Run afterSave hooks
+          await this.runHooks('afterSave', this);
+          
+          return result;
         }
         
         async destroy() {
-          return await this.constructor.destroy({ where: `id = '${this.id}'` });
+          // Run beforeDestroy hooks
+          await this.runHooks('beforeDestroy', this);
+          
+          const result = await this.constructor.destroy({ where: `id = '${this.id}'` });
+          
+          // Run afterDestroy hooks
+          await this.runHooks('afterDestroy', this);
+          
+          return result;
         }
       }
       
