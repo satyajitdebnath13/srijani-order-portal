@@ -26,6 +26,22 @@ export const createOrder = async (req, res) => {
   const transaction = await db.sequelize.transaction();
   
   try {
+    // Validate required fields
+    if (!req.body || !req.body.items || !Array.isArray(req.body.items) || req.body.items.length === 0) {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'Items array is required and must not be empty' });
+    }
+
+    // Validate items structure
+    for (const item of req.body.items) {
+      if (!item.product_name || !item.quantity || item.quantity <= 0 || !item.unit_price || item.unit_price < 0) {
+        await transaction.rollback();
+        return res.status(400).json({ 
+          error: 'Each item must have product_name, quantity (> 0), and unit_price (>= 0)' 
+        });
+      }
+    }
+
     const {
       customer_id,
       customer_email,
@@ -78,7 +94,7 @@ export const createOrder = async (req, res) => {
         email: customer_email,
         password: generatedPassword,
         name: customer_name,
-        phone: customer_phone,
+        phone: customer_phone || null,
         role: 'customer'
       }, { transaction });
 
@@ -113,6 +129,12 @@ export const createOrder = async (req, res) => {
       return sum + (item.quantity * item.unit_price);
     }, 0);
 
+    // Validate total amount
+    if (total_amount <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'Total amount must be greater than 0' });
+    }
+
     // Create order
     const order = await Order.create({
       customer_id: customer_id || customer.id,
@@ -120,12 +142,12 @@ export const createOrder = async (req, res) => {
       status: 'pending_approval',
       total_amount,
       currency: currency || 'EUR',
-      shipping_address_id,
-      billing_address_id,
-      payment_method,
-      special_instructions,
-      internal_notes,
-      estimated_delivery
+      shipping_address_id: shipping_address_id || null,
+      billing_address_id: billing_address_id || null,
+      payment_method: payment_method || null,
+      special_instructions: special_instructions || null,
+      internal_notes: internal_notes || null,
+      estimated_delivery: estimated_delivery || null
     }, { transaction });
 
     // Create order items
@@ -133,14 +155,14 @@ export const createOrder = async (req, res) => {
       items.map(item => OrderItem.create({
         order_id: order.id,
         product_name: item.product_name,
-        sku: item.sku,
-        description: item.description,
+        sku: item.sku || null,
+        description: item.description || null,
         quantity: item.quantity,
         unit_price: item.unit_price,
-        size: item.size,
-        color: item.color,
-        material: item.material,
-        custom_measurements: item.custom_measurements,
+        size: item.size || null,
+        color: item.color || null,
+        material: item.material || null,
+        custom_measurements: item.custom_measurements || null,
         subtotal: item.quantity * item.unit_price
       }, { transaction }))
     );
