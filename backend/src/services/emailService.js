@@ -105,6 +105,86 @@ const getEmailWrapper = (content) => {
   `;
 };
 
+// Order Approval Email with Login Credentials (for new customers)
+export const sendOrderApprovalEmailWithCredentials = async (order, customer, items, generatedPassword) => {
+  const itemsHtml = items.map(item => `
+    <tr>
+      <td>${item.product_name}</td>
+      <td>${item.quantity}</td>
+      <td>€${parseFloat(item.unit_price).toFixed(2)}</td>
+      <td>€${parseFloat(item.subtotal).toFixed(2)}</td>
+    </tr>
+  `).join('');
+
+  const content = `
+    <h2>Welcome! Your Order is Ready for Confirmation</h2>
+    <p>Dear ${customer.user.name},</p>
+    <p>We have created an order for you and set up your account on our portal. Please review the details below and confirm your order.</p>
+    
+    <div style="background-color: #E3F2FD; border-left: 4px solid #2196F3; padding: 15px; margin: 20px 0;">
+      <h3 style="margin: 0 0 10px 0; color: #1976D2;">🔐 Your Login Credentials</h3>
+      <p style="margin: 5px 0;"><strong>Email:</strong> ${customer.user.email}</p>
+      <p style="margin: 5px 0;"><strong>Password:</strong> <code style="background-color: #f5f5f5; padding: 2px 6px; border-radius: 3px;">${generatedPassword}</code></p>
+      <p style="margin: 10px 0 0 0; font-size: 12px; color: #666;">Please save these credentials. You can change your password after logging in.</p>
+    </div>
+    
+    <h3>Order Details</h3>
+    <p><strong>Order Number:</strong> ${order.order_number}</p>
+    <p><strong>Order Date:</strong> ${new Date(order.created_at).toLocaleDateString()}</p>
+    
+    <table class="order-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Quantity</th>
+          <th>Unit Price</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemsHtml}
+      </tbody>
+    </table>
+    
+    <p class="total">Total Amount: €${parseFloat(order.total_amount).toFixed(2)}</p>
+    
+    <div class="checkbox-container">
+      <p><strong>⚠️ Important: Please read before approving</strong></p>
+      <p>By clicking "Approve Order" below, you confirm that you have read and agree to our:</p>
+      <ul>
+        <li><a href="${process.env.FRONTEND_URL}/legal/terms">Terms & Conditions</a></li>
+        <li><a href="${process.env.FRONTEND_URL}/legal/privacy">Privacy Policy</a></li>
+      </ul>
+    </div>
+    
+    <p style="text-align: center; margin: 30px 0;">
+      <a href="${process.env.FRONTEND_URL}/orders/${order.id}/approve" class="button">✓ Approve Order</a>
+      <a href="${process.env.FRONTEND_URL}/orders/${order.id}/challenge" class="button button-secondary">✎ Request Changes</a>
+    </p>
+    
+    <div style="background-color: #F3E5F5; border-left: 4px solid #9C27B0; padding: 15px; margin: 20px 0;">
+      <h4 style="margin: 0 0 10px 0; color: #7B1FA2;">📱 Next Steps:</h4>
+      <ol style="margin: 0; padding-left: 20px;">
+        <li>Click "Approve Order" above</li>
+        <li>You'll be redirected to our portal</li>
+        <li>Login with the credentials provided above</li>
+        <li>Review and confirm your order</li>
+        <li>Accept our Terms & Conditions</li>
+      </ol>
+    </div>
+    
+    <p><strong>Note:</strong> This approval request will expire in 48 hours.</p>
+    <p>If you have any questions, please don't hesitate to contact us.</p>
+  `;
+
+  return sendEmail(
+    customer.user.email,
+    `Welcome! Order Confirmation Required - ${order.order_number}`,
+    getEmailWrapper(content),
+    'order_approval_with_credentials'
+  );
+};
+
 // Order Approval Email
 export const sendOrderApprovalEmail = async (order, customer, items) => {
   const itemsHtml = items.map(item => `
@@ -367,6 +447,7 @@ export const sendWelcomeEmail = async (user) => {
 
 export default {
   sendOrderApprovalEmail,
+  sendOrderApprovalEmailWithCredentials,
   sendOrderConfirmedEmail,
   sendOrderStatusUpdateEmail,
   sendReturnRequestReceivedEmail,

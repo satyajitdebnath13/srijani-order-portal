@@ -16,11 +16,21 @@ const router = express.Router();
 
 // Validation
 const createOrderValidation = [
-  body('customer_id').isUUID().withMessage('Valid customer ID is required'),
+  body('customer_id').optional().isUUID().withMessage('Valid customer ID is required'),
+  body('customer_email').optional().isEmail().withMessage('Valid customer email is required'),
+  body('customer_name').optional().notEmpty().withMessage('Customer name is required'),
+  body('customer_phone').optional().isString().withMessage('Customer phone must be a string'),
   body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
   body('items.*.product_name').notEmpty().withMessage('Product name is required'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  body('items.*.unit_price').isFloat({ min: 0 }).withMessage('Unit price must be valid')
+  body('items.*.unit_price').isFloat({ min: 0 }).withMessage('Unit price must be valid'),
+  // Custom validation to ensure either customer_id OR customer_email+name is provided
+  body().custom((value) => {
+    if (!value.customer_id && (!value.customer_email || !value.customer_name)) {
+      throw new Error('Either customer_id or both customer_email and customer_name are required');
+    }
+    return true;
+  })
 ];
 
 // Routes

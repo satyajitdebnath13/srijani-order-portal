@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import db from '../models/index.js';
 import { 
   sendOrderApprovalEmail, 
+  sendOrderApprovalEmailWithCredentials,
   sendOrderConfirmedEmail,
   sendOrderStatusUpdateEmail 
 } from '../services/emailService.js';
@@ -27,6 +28,9 @@ export const createOrder = async (req, res) => {
   try {
     const {
       customer_id,
+      customer_email,
+      customer_name,
+      customer_phone,
       items,
       shipping_address_id,
       billing_address_id,
@@ -37,14 +41,71 @@ export const createOrder = async (req, res) => {
       currency
     } = req.body;
 
-    // Validate customer exists
-    const customer = await Customer.findByPk(customer_id, {
-      include: [{ model: User, as: 'user' }]
-    });
+    let customer;
+    let isNewCustomer = false;
 
-    if (!customer) {
-      await transaction.rollback();
-      return res.status(404).json({ error: 'Customer not found' });
+    // Check if customer_id is provided (existing customer)
+    if (customer_id) {
+      customer = await Customer.findByPk(customer_id, {
+        include: [{ model: User, as: 'user' }]
+      });
+
+      if (!customer) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'Customer not found' });
+      }
+    } else {
+      // Create new customer account
+      if (!customer_email || !customer_name) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'Customer email and name are required for new customers' });
+      }
+
+      // Check if user already exists
+      const existingUser = await User.findOne({ where: { email: customer_email } });
+      if (existingUser) {
+        await transaction.rollback();
+        return res.status(409).json({ error: 'Customer with this email already exists' });
+      }
+
+      // Generate password: first 3 letters of name + last 4 digits of timestamp
+      const namePrefix = customer_name.toLowerCase().replace(/[^a-z]/g, '').substring(0, 3);
+      const timestampSuffix = Date.now().toString().slice(-4);
+      const generatedPassword = `${namePrefix}${timestampSuffix}`;
+
+      // Create user account
+      const user = await User.create({
+        email: customer_email,
+        password: generatedPassword,
+        name: customer_name,
+        phone: customer_phone,
+        role: 'customer'
+      }, { transaction });
+
+      // Store the generated password for email
+      user.generatedPassword = generatedPassword;
+
+      // Create customer profile
+      customer = await Customer.create({
+        user_id: user.id,
+        language_preference: 'en'
+      }, { transaction });
+
+      // Log activity for new customer creation
+      await ActivityLog.create({
+        user_id: user.id,
+        action: 'user_created_via_order',
+        entity_type: 'user',
+        entity_id: user.id,
+        details: { 
+          created_by_admin: req.user.id,
+          order_creation: true 
+        },
+        ip_address: req.ip
+      }, { transaction });
+
+      isNewCustomer = true;
+      customer.user = user;
     }
 
     // Calculate total
@@ -54,7 +115,7 @@ export const createOrder = async (req, res) => {
 
     // Create order
     const order = await Order.create({
-      customer_id,
+      customer_id: customer_id || customer.id,
       admin_id: req.user.id,
       status: 'pending_approval',
       total_amount,
@@ -104,16 +165,25 @@ export const createOrder = async (req, res) => {
     await transaction.commit();
 
     // Send approval email to customer
-    await sendOrderApprovalEmail(order, customer, orderItems);
+    if (isNewCustomer) {
+      // For new customers, include login credentials in email
+      await sendOrderApprovalEmailWithCredentials(order, customer, orderItems, customer.user.generatedPassword);
+    } else {
+      // For existing customers, send regular approval email
+      await sendOrderApprovalEmail(order, customer, orderItems);
+    }
 
-    logger.info(`Order created: ${order.order_number} by admin ${req.user.email}`);
+    logger.info(`Order created: ${order.order_number} by admin ${req.user.email}${isNewCustomer ? ' (new customer created)' : ''}`);
 
     res.status(201).json({
-      message: 'Order created successfully and sent for customer approval',
+      message: isNewCustomer 
+        ? 'Order created successfully, customer account created, and approval email sent with login credentials'
+        : 'Order created successfully and sent for customer approval',
       order: {
         ...order.toJSON(),
         items: orderItems
-      }
+      },
+      isNewCustomer
     });
   } catch (error) {
     await transaction.rollback();
