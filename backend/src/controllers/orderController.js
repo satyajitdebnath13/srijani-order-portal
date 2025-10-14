@@ -23,6 +23,22 @@ const {
 } = db;
 
 export const createOrder = async (req, res) => {
+  // Add debugging
+  logger.info('Create order request received:', {
+    body: req.body,
+    user: req.user?.id,
+    timestamp: new Date().toISOString()
+  });
+
+  // Test database connection
+  try {
+    await db.sequelize.authenticate();
+    logger.info('Database connection verified');
+  } catch (dbError) {
+    logger.error('Database connection error:', dbError);
+    return res.status(500).json({ error: 'Database connection error. Please try again later.' });
+  }
+
   const transaction = await db.sequelize.transaction();
   
   try {
