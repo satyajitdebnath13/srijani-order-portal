@@ -36,10 +36,16 @@ const logEmail = async (recipient, subject, template, status, errorMessage = nul
 // Send email
 const sendEmail = async (to, subject, html, template = null) => {
   try {
+    // Check if email configuration is available
+    if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      logger.warn('Email configuration missing, skipping email send');
+      return { success: false, error: 'Email configuration missing' };
+    }
+
     const transporter = createTransporter();
     
     const mailOptions = {
-      from: process.env.EMAIL_FROM,
+      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       to,
       subject,
       html
@@ -109,10 +115,10 @@ const getEmailWrapper = (content) => {
 export const sendOrderApprovalEmailWithCredentials = async (order, customer, items, generatedPassword) => {
   const itemsHtml = items.map(item => `
     <tr>
-      <td>${item.product_name}</td>
-      <td>${item.quantity}</td>
-      <td>€${parseFloat(item.unit_price).toFixed(2)}</td>
-      <td>€${parseFloat(item.subtotal).toFixed(2)}</td>
+      <td>${item.product_name || 'N/A'}</td>
+      <td>${item.quantity || 0}</td>
+      <td>€${parseFloat(item.unit_price || 0).toFixed(2)}</td>
+      <td>€${parseFloat(item.subtotal || (item.quantity * item.unit_price) || 0).toFixed(2)}</td>
     </tr>
   `).join('');
 
@@ -189,10 +195,10 @@ export const sendOrderApprovalEmailWithCredentials = async (order, customer, ite
 export const sendOrderApprovalEmail = async (order, customer, items) => {
   const itemsHtml = items.map(item => `
     <tr>
-      <td>${item.product_name}</td>
-      <td>${item.quantity}</td>
-      <td>€${parseFloat(item.unit_price).toFixed(2)}</td>
-      <td>€${parseFloat(item.subtotal).toFixed(2)}</td>
+      <td>${item.product_name || 'N/A'}</td>
+      <td>${item.quantity || 0}</td>
+      <td>€${parseFloat(item.unit_price || 0).toFixed(2)}</td>
+      <td>€${parseFloat(item.subtotal || (item.quantity * item.unit_price) || 0).toFixed(2)}</td>
     </tr>
   `).join('');
 

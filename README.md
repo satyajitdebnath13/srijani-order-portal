@@ -166,8 +166,8 @@ cd frontend && npm run dev
 
 Access:
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:5000
-- API Health: http://localhost:5000/health
+- Backend API: http://localhost:5001
+- API Health: http://localhost:5001/health
 
 ### 5. Create First Admin User
 

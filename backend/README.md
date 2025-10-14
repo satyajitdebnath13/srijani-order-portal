@@ -30,7 +30,7 @@ CREATE DATABASE srijani_portal;
 npm run dev
 ```
 
-The server will start on `http://localhost:5000`
+The server will start on `http://localhost:5001`
 
 ### 5. Create First Admin User
 Use an API client (Postman/Insomnia) or the frontend to register a user, then manually update the database:

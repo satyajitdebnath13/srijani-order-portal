@@ -140,7 +140,8 @@ export const createOrder = async (req, res) => {
         size: item.size,
         color: item.color,
         material: item.material,
-        custom_measurements: item.custom_measurements
+        custom_measurements: item.custom_measurements,
+        subtotal: item.quantity * item.unit_price
       }, { transaction }))
     );
 
@@ -164,13 +165,19 @@ export const createOrder = async (req, res) => {
 
     await transaction.commit();
 
-    // Send approval email to customer
-    if (isNewCustomer) {
-      // For new customers, include login credentials in email
-      await sendOrderApprovalEmailWithCredentials(order, customer, orderItems, customer.user.generatedPassword);
-    } else {
-      // For existing customers, send regular approval email
-      await sendOrderApprovalEmail(order, customer, orderItems);
+    // Send approval email to customer (non-blocking)
+    try {
+      if (isNewCustomer) {
+        // For new customers, include login credentials in email
+        await sendOrderApprovalEmailWithCredentials(order, customer, orderItems, customer.user.generatedPassword);
+      } else {
+        // For existing customers, send regular approval email
+        await sendOrderApprovalEmail(order, customer, orderItems);
+      }
+      logger.info(`Approval email sent for order: ${order.order_number}`);
+    } catch (emailError) {
+      logger.error('Failed to send approval email:', emailError);
+      // Don't fail the order creation if email fails
     }
 
     logger.info(`Order created: ${order.order_number} by admin ${req.user.email}${isNewCustomer ? ' (new customer created)' : ''}`);
@@ -187,8 +194,24 @@ export const createOrder = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
-    logger.error('Create order error:', error);
-    res.status(500).json({ error: 'Failed to create order' });
+    logger.error('Create order error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      body: req.body,
+      user: req.user?.id
+    });
+    
+    // Return more specific error information in development
+    if (process.env.NODE_ENV === 'development') {
+      res.status(500).json({ 
+        error: 'Failed to create order',
+        details: error.message,
+        type: error.name
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to create order' });
+    }
   }
 };
 
