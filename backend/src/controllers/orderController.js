@@ -229,14 +229,20 @@ export const createOrder = async (req, res) => {
 
     // Send approval email to customer (non-blocking)
     try {
+      let emailResult;
       if (isNewCustomer) {
         // For new customers, include login credentials in email
-        await sendOrderApprovalEmailWithCredentials(order, customer, orderItems, customer.user.generatedPassword);
+        emailResult = await sendOrderApprovalEmailWithCredentials(order, customer, orderItems, customer.user.generatedPassword);
       } else {
         // For existing customers, send regular approval email
-        await sendOrderApprovalEmail(order, customer, orderItems);
+        emailResult = await sendOrderApprovalEmail(order, customer, orderItems);
       }
-      logger.info(`Approval email sent for order: ${order.order_number}`);
+      
+      if (emailResult && emailResult.success) {
+        logger.info(`Approval email sent for order: ${order.order_number}`);
+      } else {
+        logger.warn(`Failed to send approval email for order: ${order.order_number}, Error: ${emailResult ? emailResult.error : 'Unknown error'}`);
+      }
     } catch (emailError) {
       logger.error('Failed to send approval email:', emailError);
       // Don't fail the order creation if email fails

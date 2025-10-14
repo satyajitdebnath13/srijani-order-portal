@@ -54,6 +54,49 @@ router.get('/health', async (req, res) => {
   }
 });
 
+// Test email endpoint
+router.post('/test-email', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { sendOrderApprovalEmail } = await import('../services/emailService.js');
+    
+    // Create a test order object
+    const testOrder = {
+      order_number: 'TEST-123',
+      total_amount: 100,
+      currency: 'EUR',
+      created_at: new Date()
+    };
+    
+    const testCustomer = {
+      name: 'Test Customer',
+      user: {
+        email: req.body.testEmail || 'test@example.com'
+      }
+    };
+    
+    const testItems = [{
+      product_name: 'Test Product',
+      quantity: 1,
+      unit_price: 100,
+      subtotal: 100
+    }];
+    
+    const result = await sendOrderApprovalEmail(testOrder, testCustomer, testItems);
+    
+    res.json({
+      success: result.success,
+      message: result.success ? 'Test email sent successfully' : 'Test email failed',
+      error: result.error || null
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Test email failed',
+      error: error.message
+    });
+  }
+});
+
 // Debug endpoint
 router.post('/debug', authenticate, authorize('admin'), (req, res) => {
   try {
