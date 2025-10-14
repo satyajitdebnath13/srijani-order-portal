@@ -135,8 +135,14 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ error: 'Total amount must be greater than 0' });
     }
 
+    // Generate order number
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    const order_number = `ORD-${timestamp}-${random}`;
+
     // Create order
     const order = await Order.create({
+      order_number,
       customer_id: customer_id || customer.id,
       admin_id: req.user.id,
       status: 'pending_approval',

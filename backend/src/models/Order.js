@@ -128,14 +128,5 @@ const Order = sequelize.define('Order', {
   tableName: 'orders'
 });
 
-// Generate order number before creating
-Order.beforeCreate(async (order) => {
-  if (!order.order_number) {
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000);
-    order.order_number = `ORD-${timestamp}-${random}`;
-  }
-});
-
 export default Order;
 
