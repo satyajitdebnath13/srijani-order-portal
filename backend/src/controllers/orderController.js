@@ -222,23 +222,80 @@ export const createOrder = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
+    
+    // Comprehensive error logging
     logger.error('Create order error:', {
       message: error.message,
       stack: error.stack,
       name: error.name,
+      code: error.code,
+      sql: error.sql,
       body: req.body,
-      user: req.user?.id
+      user: req.user?.id,
+      customerType: req.body.customer_id ? 'existing' : 'new',
+      // Sequelize-specific error details
+      ...(error.original && {
+        original: {
+          message: error.original.message,
+          code: error.original.code,
+          detail: error.original.detail
+        }
+      })
     });
+    
+    // Handle specific error types
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: error.errors.map(e => ({
+          field: e.path,
+          message: e.message,
+          value: e.value
+        }))
+      });
+    }
+    
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ 
+        error: 'A record with this data already exists',
+        details: error.errors.map(e => ({
+          field: e.path,
+          message: e.message
+        }))
+      });
+    }
+    
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+      return res.status(400).json({ 
+        error: 'Invalid reference to related resource',
+        details: 'Please check customer_id, address_id, or other referenced fields'
+      });
+    }
+    
+    if (error.name === 'SequelizeDatabaseError') {
+      logger.error('Database error details:', {
+        sql: error.sql,
+        parameters: error.parameters
+      });
+      return res.status(500).json({ 
+        error: 'Database error occurred',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
     
     // Return more specific error information in development
     if (process.env.NODE_ENV === 'development') {
       res.status(500).json({ 
         error: 'Failed to create order',
         details: error.message,
-        type: error.name
+        type: error.name,
+        stack: error.stack
       });
     } else {
-      res.status(500).json({ error: 'Failed to create order' });
+      res.status(500).json({ 
+        error: 'Failed to create order',
+        message: error.message 
+      });
     }
   }
 };

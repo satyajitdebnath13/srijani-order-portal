@@ -10,6 +10,7 @@ import {
   getAllCustomers
 } from '../controllers/authController.js';
 import { authenticate, authorize } from '../middleware/auth.js';
+import { validateRequest } from '../middleware/validateRequest.js';
 
 const router = express.Router();
 
@@ -27,8 +28,8 @@ const loginValidation = [
 ];
 
 // Routes
-router.post('/register', registerValidation, register);
-router.post('/login', loginValidation, login);
+router.post('/register', registerValidation, validateRequest, register);
+router.post('/login', loginValidation, validateRequest, login);
 router.get('/me', authenticate, getMe);
 router.get('/addresses', authenticate, getAddresses);
 router.get('/customers', authenticate, authorize('admin'), getAllCustomers);

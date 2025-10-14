@@ -7,6 +7,7 @@ import {
   updateReturnStatus
 } from '../controllers/returnController.js';
 import { authenticate, authorize } from '../middleware/auth.js';
+import { validateRequest } from '../middleware/validateRequest.js';
 
 const router = express.Router();
 
@@ -26,7 +27,7 @@ const createReturnValidation = [
 ];
 
 // Routes
-router.post('/', authenticate, createReturnValidation, createReturn);
+router.post('/', authenticate, createReturnValidation, validateRequest, createReturn);
 router.get('/', authenticate, getReturns);
 router.get('/:returnId', authenticate, getReturnById);
 router.put('/:returnId/status', authenticate, authorize('admin'), updateReturnStatus);

@@ -11,6 +11,7 @@ import {
   getRecentOrders
 } from '../controllers/orderController.js';
 import { authenticate, authorize } from '../middleware/auth.js';
+import { validateRequest } from '../middleware/validateRequest.js';
 
 const router = express.Router();
 
@@ -68,7 +69,7 @@ router.post('/debug', authenticate, authorize('admin'), (req, res) => {
 });
 
 // Routes
-router.post('/', authenticate, authorize('admin'), createOrderValidation, createOrder);
+router.post('/', authenticate, authorize('admin'), createOrderValidation, validateRequest, createOrder);
 router.post('/:orderId/approve', authenticate, approveOrder);
 router.put('/:orderId/status', authenticate, authorize('admin'), updateOrderStatus);
 router.get('/stats', authenticate, authorize('admin'), getOrderStats);

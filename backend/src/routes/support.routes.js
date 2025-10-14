@@ -9,6 +9,7 @@ import {
   getRecentTickets
 } from '../controllers/supportController.js';
 import { authenticate, authorize } from '../middleware/auth.js';
+import { validateRequest } from '../middleware/validateRequest.js';
 
 const router = express.Router();
 
@@ -33,11 +34,11 @@ const replyValidation = [
 ];
 
 // Routes
-router.post('/', authenticate, createTicketValidation, createTicket);
+router.post('/', authenticate, createTicketValidation, validateRequest, createTicket);
 router.get('/recent', authenticate, authorize('admin'), getRecentTickets);
 router.get('/', authenticate, getTickets);
 router.get('/:ticketId', authenticate, getTicketById);
-router.post('/:ticketId/reply', authenticate, replyValidation, replyToTicket);
+router.post('/:ticketId/reply', authenticate, replyValidation, validateRequest, replyToTicket);
 router.put('/:ticketId/status', authenticate, authorize('admin'), updateTicketStatus);
 
 export default router;
