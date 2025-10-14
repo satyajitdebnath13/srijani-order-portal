@@ -156,6 +156,24 @@ export const createOrder = async (req, res) => {
     const random = Math.floor(Math.random() * 1000);
     const order_number = `ORD-${timestamp}-${random}`;
 
+    // Validate and clean address IDs
+    let cleanShippingAddressId = null;
+    let cleanBillingAddressId = null;
+    
+    // Check if shipping_address_id is a valid UUID, otherwise set to null
+    if (shipping_address_id && shipping_address_id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      cleanShippingAddressId = shipping_address_id;
+    } else if (shipping_address_id) {
+      logger.warn(`Invalid shipping_address_id format: ${shipping_address_id}, setting to null`);
+    }
+    
+    // Check if billing_address_id is a valid UUID, otherwise set to null
+    if (billing_address_id && billing_address_id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      cleanBillingAddressId = billing_address_id;
+    } else if (billing_address_id) {
+      logger.warn(`Invalid billing_address_id format: ${billing_address_id}, setting to null`);
+    }
+
     // Create order
     const order = await Order.create({
       order_number,
@@ -164,8 +182,8 @@ export const createOrder = async (req, res) => {
       status: 'pending_approval',
       total_amount,
       currency: currency || 'EUR',
-      shipping_address_id: shipping_address_id || null,
-      billing_address_id: billing_address_id || null,
+      shipping_address_id: cleanShippingAddressId,
+      billing_address_id: cleanBillingAddressId,
       payment_method: payment_method || null,
       special_instructions: special_instructions || null,
       internal_notes: internal_notes || null,

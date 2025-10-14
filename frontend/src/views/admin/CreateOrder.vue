@@ -316,15 +316,19 @@
               </div>
               <div>
                 <label for="shipping-address" class="block text-sm font-medium text-gray-700 mb-2">
-                  Shipping Address ID
+                  Shipping Address ID (UUID)
                 </label>
                 <input
                   id="shipping-address"
                   v-model="form.shipping_address_id"
                   type="text"
                   class="form-input"
-                  placeholder="Optional: Enter address ID"
+                  placeholder="Optional: Enter valid UUID (e.g., 123e4567-e89b-12d3-a456-426614174000)"
+                  pattern="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
                 />
+                <p class="text-xs text-gray-500 mt-1">
+                  Leave empty if no specific address. Must be a valid UUID format.
+                </p>
               </div>
             </div>
             
@@ -490,8 +494,17 @@ const handleSubmit = async () => {
   
   loading.value = true
   try {
+    // Helper function to validate UUID
+    const isValidUUID = (uuid) => {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      return uuid && uuidRegex.test(uuid);
+    };
+
     const orderData = {
       ...form.value,
+      // Clean up address IDs - only send valid UUIDs or empty strings
+      shipping_address_id: isValidUUID(form.value.shipping_address_id) ? form.value.shipping_address_id : '',
+      billing_address_id: isValidUUID(form.value.billing_address_id) ? form.value.billing_address_id : '',
       // Remove customer fields if using existing customer
       ...(customerType.value === 'existing' && {
         customer_email: undefined,
