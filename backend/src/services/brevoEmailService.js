@@ -1,29 +1,7 @@
-import * as brevo from '@getbrevo/brevo';
 import db from '../models/index.js';
 import logger from '../utils/logger.js';
 
 const { EmailLog } = db;
-
-// Initialize Brevo API client
-let apiInstance = null;
-
-const initializeBrevo = () => {
-  if (!apiInstance) {
-    const apiKey = process.env.BREVO_API_KEY;
-    if (!apiKey) {
-      logger.warn('BREVO_API_KEY not set, email functionality disabled');
-      return null;
-    }
-    
-    const defaultClient = brevo.ApiClient.instance;
-    const apiKeyAuth = defaultClient.authentications['api-key'];
-    apiKeyAuth.apiKey = apiKey;
-    
-    apiInstance = new brevo.TransactionalEmailsApi();
-    logger.info('Brevo API client initialized successfully');
-  }
-  return apiInstance;
-};
 
 // Log email
 const logEmail = async (recipient, subject, template, status, errorMessage = null) => {
@@ -41,7 +19,7 @@ const logEmail = async (recipient, subject, template, status, errorMessage = nul
   }
 };
 
-// Send email using Brevo API
+// Send email using Brevo API via HTTP
 const sendEmail = async (to, subject, html, template = null) => {
   try {
     // Check if Brevo API key is available
@@ -50,21 +28,33 @@ const sendEmail = async (to, subject, html, template = null) => {
       return { success: false, error: 'Brevo API key not configured' };
     }
 
-    const api = initializeBrevo();
-    if (!api) {
-      return { success: false, error: 'Failed to initialize Brevo API' };
-    }
-
-    const sendSmtpEmail = new brevo.SendSmtpEmail();
-    sendSmtpEmail.to = [{ email: to }];
-    sendSmtpEmail.subject = subject;
-    sendSmtpEmail.htmlContent = html;
-    sendSmtpEmail.sender = {
-      name: process.env.EMAIL_FROM_NAME || 'Srijani',
-      email: process.env.EMAIL_FROM_EMAIL || 'noreply@srijani.com'
+    const brevoApiUrl = 'https://api.brevo.com/v3/smtp/email';
+    
+    const emailData = {
+      to: [{ email: to }],
+      subject: subject,
+      htmlContent: html,
+      sender: {
+        name: process.env.EMAIL_FROM_NAME || 'Srijani',
+        email: process.env.EMAIL_FROM_EMAIL || 'noreply@srijani.com'
+      }
     };
 
-    const result = await api.sendTransacEmail(sendSmtpEmail);
+    const response = await fetch(brevoApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': process.env.BREVO_API_KEY
+      },
+      body: JSON.stringify(emailData)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`Brevo API error: ${response.status} - ${errorData}`);
+    }
+
+    const result = await response.json();
     
     await logEmail(to, subject, template, 'sent');
     
@@ -75,7 +65,7 @@ const sendEmail = async (to, subject, html, template = null) => {
       message: error.message,
       recipient: to,
       subject: subject,
-      error: error.body || error
+      error: error
     });
     await logEmail(to, subject, template, 'failed', error.message);
     return { success: false, error: error.message };
