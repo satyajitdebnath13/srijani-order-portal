@@ -57,7 +57,7 @@ router.get('/health', async (req, res) => {
 // Test email endpoint
 router.post('/test-email', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { sendOrderApprovalEmail } = await import('../services/emailService.js');
+    const { sendOrderApprovalEmail } = await import('../services/brevoEmailService.js');
     
     // Create a test order object
     const testOrder = {
@@ -85,8 +85,9 @@ router.post('/test-email', authenticate, authorize('admin'), async (req, res) =>
     
     res.json({
       success: result.success,
-      message: result.success ? 'Test email sent successfully' : 'Test email failed',
-      error: result.error || null
+      message: result.success ? 'Test email sent successfully via Brevo' : 'Test email failed',
+      error: result.error || null,
+      messageId: result.messageId || null
     });
   } catch (error) {
     res.status(500).json({

@@ -5,7 +5,7 @@ import {
   sendOrderApprovalEmailWithCredentials,
   sendOrderConfirmedEmail,
   sendOrderStatusUpdateEmail 
-} from '../services/emailService.js';
+} from '../services/brevoEmailService.js';
 import { generateInvoicePDF } from '../services/pdfService.js';
 import logger from '../utils/logger.js';
 
