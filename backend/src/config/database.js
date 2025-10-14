@@ -31,8 +31,10 @@ const getDatabaseConfig = () => {
 
 const config = getDatabaseConfig();
 
+// Create Sequelize instance with proper configuration
 const sequelize = process.env.DATABASE_URL
-  ? new Sequelize(config.url, {
+  ? new Sequelize({
+      url: config.url,
       dialect: 'postgres',
       dialectOptions: config.dialectOptions,
       logging: process.env.NODE_ENV === 'development' ? console.log : false,
@@ -48,27 +50,25 @@ const sequelize = process.env.DATABASE_URL
         freezeTableName: true
       }
     })
-  : new Sequelize(
-      config.database,
-      config.username,
-      config.password,
-      {
-        host: config.host,
-        port: config.port,
-        dialect: config.dialect,
-        logging: process.env.NODE_ENV === 'development' ? console.log : false,
-        pool: {
-          max: 5,
-          min: 0,
-          acquire: 30000,
-          idle: 10000
-        },
-        define: {
-          timestamps: true,
-          underscored: true,
-          freezeTableName: true
-        }
+  : new Sequelize({
+      database: config.database,
+      username: config.username,
+      password: config.password,
+      host: config.host,
+      port: config.port,
+      dialect: config.dialect,
+      logging: process.env.NODE_ENV === 'development' ? console.log : false,
+      pool: {
+        max: 5,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+      },
+      define: {
+        timestamps: true,
+        underscored: true,
+        freezeTableName: true
       }
-    );
+    });
 
 export default sequelize;

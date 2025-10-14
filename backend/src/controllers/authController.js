@@ -72,6 +72,17 @@ export const login = async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
+    // Test database connection
+    try {
+      await db.sequelize.authenticate();
+    } catch (dbError) {
+      logger.error('Database connection error during login:', {
+        error: dbError.message,
+        email: email
+      });
+      return res.status(500).json({ error: 'Database connection error. Please try again later.' });
+    }
+
     // Find user
     const user = await User.findOne({ where: { email } });
     
@@ -81,7 +92,17 @@ export const login = async (req, res) => {
     }
 
     // Check password
-    const isPasswordValid = await user.comparePassword(password);
+    let isPasswordValid = false;
+    try {
+      isPasswordValid = await user.comparePassword(password);
+    } catch (passwordError) {
+      logger.error('Password comparison error:', {
+        error: passwordError.message,
+        email: email,
+        userId: user.id
+      });
+      return res.status(500).json({ error: 'Authentication error. Please try again.' });
+    }
     
     if (!isPasswordValid) {
       logger.warn(`Failed login attempt for user: ${email}`);
