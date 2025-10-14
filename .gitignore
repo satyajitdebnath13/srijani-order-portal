@@ -121,7 +121,6 @@ seed.js
 
 # Production deployment files
 render.yaml
-vercel.json
 
 # Documentation files (keep only essential ones)
 PROJECT_PLAN.md
