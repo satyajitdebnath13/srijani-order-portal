@@ -67,10 +67,16 @@ export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Validate request body exists
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
     // Find user
     const user = await User.findOne({ where: { email } });
     
     if (!user) {
+      logger.warn(`Login attempt with non-existent email: ${email}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -78,30 +84,37 @@ export const login = async (req, res) => {
     const isPasswordValid = await user.comparePassword(password);
     
     if (!isPasswordValid) {
+      logger.warn(`Failed login attempt for user: ${email}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Check if user is active
     if (!user.is_active) {
+      logger.warn(`Login attempt for inactive account: ${email}`);
       return res.status(403).json({ error: 'Account is inactive' });
     }
 
     // Update last login
     await user.update({ last_login: new Date() });
 
-    // Log activity
-    await ActivityLog.create({
-      user_id: user.id,
-      action: 'user_login',
-      entity_type: 'user',
-      entity_id: user.id,
-      ip_address: req.ip
-    });
+    // Log activity (wrapped in try-catch to not fail login if logging fails)
+    try {
+      await ActivityLog.create({
+        user_id: user.id,
+        action: 'user_login',
+        entity_type: 'user',
+        entity_id: user.id,
+        ip_address: req.ip
+      });
+    } catch (logError) {
+      logger.error('Failed to log activity:', logError);
+      // Don't fail the login if activity logging fails
+    }
 
     // Generate token
     const token = generateToken(user);
 
-    logger.info(`User logged in: ${email}`);
+    logger.info(`User logged in successfully: ${email}`);
 
     res.json({
       message: 'Login successful',
@@ -114,8 +127,23 @@ export const login = async (req, res) => {
       token
     });
   } catch (error) {
-    logger.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    logger.error('Login error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      email: req.body?.email
+    });
+    
+    // Return more specific error in development
+    if (process.env.NODE_ENV === 'development') {
+      res.status(500).json({ 
+        error: 'Login failed',
+        details: error.message,
+        type: error.name
+      });
+    } else {
+      res.status(500).json({ error: 'Login failed. Please try again later.' });
+    }
   }
 };
 

@@ -16,31 +16,42 @@ import logger from '../utils/logger.js';
  * );
  */
 export const validateRequest = (req, res, next) => {
-  const errors = validationResult(req);
-  
-  if (!errors.isEmpty()) {
-    // Log validation errors for debugging
-    logger.warn('Validation failed', {
-      url: req.url,
-      method: req.method,
-      errors: errors.array(),
-      body: req.body,
-      user: req.user?.id
-    });
+  try {
+    const errors = validationResult(req);
     
-    // Return formatted errors to client
-    return res.status(400).json({
-      error: 'Validation failed',
-      details: errors.array().map(err => ({
-        field: err.path || err.param,
-        message: err.msg,
-        value: err.value
-      }))
-    });
+    if (!errors.isEmpty()) {
+      // Log validation errors for debugging (wrapped in try-catch)
+      try {
+        logger.warn('Validation failed', {
+          url: req.url,
+          method: req.method,
+          errors: errors.array(),
+          body: req.body,
+          user: req.user?.id
+        });
+      } catch (logError) {
+        // Don't fail validation if logging fails
+        console.error('Logger error:', logError);
+      }
+      
+      // Return formatted errors to client
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: errors.array().map(err => ({
+          field: err.path || err.param,
+          message: err.msg,
+          value: err.value
+        }))
+      });
+    }
+    
+    // No validation errors, proceed to next middleware/controller
+    next();
+  } catch (error) {
+    // If anything goes wrong in validation middleware, log and pass to error handler
+    console.error('validateRequest middleware error:', error);
+    next(error);
   }
-  
-  // No validation errors, proceed to next middleware/controller
-  next();
 };
 
 /**
@@ -52,30 +63,40 @@ export const validateRequest = (req, res, next) => {
  */
 export const validate = (validations) => {
   return async (req, res, next) => {
-    // Run all validations in parallel
-    await Promise.all(validations.map(validation => validation.run(req)));
-    
-    const errors = validationResult(req);
-    if (errors.isEmpty()) {
-      return next();
+    try {
+      // Run all validations in parallel
+      await Promise.all(validations.map(validation => validation.run(req)));
+      
+      const errors = validationResult(req);
+      if (errors.isEmpty()) {
+        return next();
+      }
+      
+      // Log validation errors (wrapped in try-catch)
+      try {
+        logger.warn('Validation failed', {
+          url: req.url,
+          method: req.method,
+          errors: errors.array(),
+          body: req.body,
+          user: req.user?.id
+        });
+      } catch (logError) {
+        console.error('Logger error:', logError);
+      }
+      
+      res.status(400).json({
+        error: 'Validation failed',
+        details: errors.array().map(err => ({
+          field: err.path || err.param,
+          message: err.msg,
+          value: err.value
+        }))
+      });
+    } catch (error) {
+      console.error('validate middleware error:', error);
+      next(error);
     }
-    
-    logger.warn('Validation failed', {
-      url: req.url,
-      method: req.method,
-      errors: errors.array(),
-      body: req.body,
-      user: req.user?.id
-    });
-    
-    res.status(400).json({
-      error: 'Validation failed',
-      details: errors.array().map(err => ({
-        field: err.path || err.param,
-        message: err.msg,
-        value: err.value
-      }))
-    });
   };
 };
 
