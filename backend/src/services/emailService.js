@@ -13,7 +13,16 @@ const createTransporter = () => {
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD
-    }
+    },
+    // Add connection timeout and retry settings
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 5000,    // 5 seconds
+    socketTimeout: 10000,      // 10 seconds
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 3,
+    rateDelta: 20000, // 20 seconds
+    rateLimit: 5
   });
 };
 
@@ -42,6 +51,13 @@ const sendEmail = async (to, subject, html, template = null) => {
       return { success: false, error: 'Email configuration missing' };
     }
 
+    // Check if email credentials are placeholder values
+    if (process.env.EMAIL_USER.includes('your_email') || 
+        process.env.EMAIL_PASSWORD.includes('your_gmail_app_password')) {
+      logger.warn('Email credentials are placeholder values, skipping email send');
+      return { success: false, error: 'Email credentials not configured' };
+    }
+
     const transporter = createTransporter();
     
     const mailOptions = {
@@ -57,7 +73,13 @@ const sendEmail = async (to, subject, html, template = null) => {
     logger.info(`Email sent to ${to}: ${subject}`);
     return { success: true };
   } catch (error) {
-    logger.error('Error sending email:', error);
+    logger.error('Error sending email:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      recipient: to,
+      subject: subject
+    });
     await logEmail(to, subject, template, 'failed', error.message);
     return { success: false, error: error.message };
   }
