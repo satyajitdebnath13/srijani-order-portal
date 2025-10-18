@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import db from '../models/index.js';
 
-const { User } = db;
+const { User, Customer } = db;
 
 export const authenticate = async (req, res, next) => {
   try {
@@ -17,8 +17,16 @@ export const authenticate = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Get user from database
-    const user = await User.findByPk(decoded.id);
+    // Get user from database with customerProfile relationship for authorization checks
+    const user = await User.findByPk(decoded.id, {
+      include: [
+        {
+          model: Customer,
+          as: 'customerProfile',
+          required: false
+        }
+      ]
+    });
 
     if (!user || !user.is_active) {
       return res.status(401).json({ error: 'Invalid token or inactive user' });
@@ -59,7 +67,15 @@ export const optionalAuth = async (req, res, next) => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findByPk(decoded.id);
+      const user = await User.findByPk(decoded.id, {
+        include: [
+          {
+            model: Customer,
+            as: 'customerProfile',
+            required: false
+          }
+        ]
+      });
       
       if (user && user.is_active) {
         req.user = user;
