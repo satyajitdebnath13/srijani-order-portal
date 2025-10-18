@@ -345,9 +345,14 @@ export const updateReturnStatus = async (req, res) => {
 
     await transaction.commit();
 
-    // Send email if approved
+    // Send email if approved (non-blocking)
     if (status === 'approved') {
-      await sendReturnApprovedEmail(returnRequest, returnRequest.customer, returnRequest.order);
+      try {
+        await sendReturnApprovedEmail(returnRequest, returnRequest.customer, returnRequest.order);
+      } catch (emailError) {
+        logger.error('Failed to send return approved email:', emailError);
+        // Don't fail the status update if email fails
+      }
     }
 
     logger.info(`Return status updated: ${returnRequest.return_number} to ${status}`);

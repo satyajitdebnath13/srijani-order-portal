@@ -51,8 +51,13 @@ export const createTicket = async (req, res) => {
 
     await transaction.commit();
 
-    // Send email
-    await sendTicketCreatedEmail(ticket, customer);
+    // Send email (non-blocking)
+    try {
+      await sendTicketCreatedEmail(ticket, customer);
+    } catch (emailError) {
+      logger.error('Failed to send ticket created email:', emailError);
+      // Don't fail ticket creation if email fails
+    }
 
     logger.info(`Support ticket created: ${ticket.ticket_number}`);
 
@@ -212,7 +217,12 @@ export const replyToTicket = async (req, res) => {
     // Send email notification (only if not internal)
     if (!ticketMessage.is_internal) {
       if (req.user.role === 'admin') {
-        await sendTicketResponseEmail(ticket, ticket.customer, message, req.user);
+        try {
+          await sendTicketResponseEmail(ticket, ticket.customer, message, req.user);
+        } catch (emailError) {
+          logger.error('Failed to send ticket response email:', emailError);
+          // Don't fail the reply if email fails
+        }
       }
     }
 

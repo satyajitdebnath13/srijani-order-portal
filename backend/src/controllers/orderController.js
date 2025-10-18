@@ -358,10 +358,20 @@ export const approveOrder = async (req, res) => {
     const { orderId } = req.params;
     const { terms_accepted } = req.body;
 
+    logger.info('Approve order request:', {
+      orderId,
+      terms_accepted,
+      userId: req.user?.id,
+      userEmail: req.user?.email,
+      timestamp: new Date().toISOString()
+    });
+
     if (!terms_accepted) {
+      await transaction.rollback();
       return res.status(400).json({ error: 'Terms and conditions must be accepted' });
     }
 
+    logger.info('Looking up order:', { orderId });
     const order = await Order.findByPk(orderId, {
       include: [
         { model: Customer, as: 'customer', include: [{ model: User, as: 'user' }] }
@@ -369,22 +379,41 @@ export const approveOrder = async (req, res) => {
     });
 
     if (!order) {
+      logger.error('Order not found:', { orderId });
       await transaction.rollback();
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    logger.info('Order found:', {
+      orderId: order.id,
+      orderNumber: order.order_number,
+      status: order.status,
+      customerUserId: order.customer?.user_id,
+      requestUserId: req.user.id
+    });
+
     // Verify customer owns this order
     if (order.customer.user_id !== req.user.id) {
+      logger.error('Unauthorized order access:', {
+        orderId,
+        customerUserId: order.customer.user_id,
+        requestUserId: req.user.id
+      });
       await transaction.rollback();
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
     if (order.status !== 'pending_approval') {
+      logger.error('Invalid order status for approval:', {
+        orderId,
+        currentStatus: order.status
+      });
       await transaction.rollback();
       return res.status(400).json({ error: 'Order cannot be approved in current status' });
     }
 
     // Update order
+    logger.info('Updating order status to confirmed');
     await order.update({
       status: 'confirmed',
       confirmed_at: new Date(),
@@ -393,6 +422,7 @@ export const approveOrder = async (req, res) => {
     }, { transaction });
 
     // Log consent
+    logger.info('Creating consent log');
     await ConsentLog.create({
       user_id: req.user.id,
       order_id: order.id,
@@ -402,6 +432,7 @@ export const approveOrder = async (req, res) => {
     }, { transaction });
 
     // Create status history
+    logger.info('Creating order status history');
     await OrderStatusHistory.create({
       order_id: order.id,
       status: 'confirmed',
@@ -410,6 +441,7 @@ export const approveOrder = async (req, res) => {
     }, { transaction });
 
     // Log activity
+    logger.info('Creating activity log');
     await ActivityLog.create({
       user_id: req.user.id,
       action: 'order_approved',
@@ -418,20 +450,34 @@ export const approveOrder = async (req, res) => {
       ip_address: req.ip
     }, { transaction });
 
+    logger.info('Committing transaction');
     await transaction.commit();
 
-    // Send confirmation email
-    await sendOrderConfirmedEmail(order, order.customer);
+    // Send confirmation email (non-blocking)
+    try {
+      logger.info('Sending order confirmation email');
+      await sendOrderConfirmedEmail(order, order.customer);
+      logger.info('Order confirmation email sent successfully');
+    } catch (emailError) {
+      logger.error('Failed to send order confirmation email:', emailError);
+      // Don't fail the order approval if email fails
+    }
 
-    logger.info(`Order approved: ${order.order_number} by customer ${req.user.email}`);
+    logger.info(`Order approved successfully: ${order.order_number} by customer ${req.user.email}`);
 
     res.json({
       message: 'Order approved successfully',
       order
     });
   } catch (error) {
+    logger.error('Approve order error:', {
+      error: error.message,
+      stack: error.stack,
+      orderId: req.params.orderId,
+      userId: req.user?.id,
+      timestamp: new Date().toISOString()
+    });
     await transaction.rollback();
-    logger.error('Approve order error:', error);
     res.status(500).json({ error: 'Failed to approve order' });
   }
 };
@@ -483,8 +529,13 @@ export const updateOrderStatus = async (req, res) => {
 
     await transaction.commit();
 
-    // Send status update email to customer
-    await sendOrderStatusUpdateEmail(order, order.customer, status, notes);
+    // Send status update email to customer (non-blocking)
+    try {
+      await sendOrderStatusUpdateEmail(order, order.customer, status, notes);
+    } catch (emailError) {
+      logger.error('Failed to send order status update email:', emailError);
+      // Don't fail the status update if email fails
+    }
 
     logger.info(`Order status updated: ${order.order_number} to ${status}`);
 

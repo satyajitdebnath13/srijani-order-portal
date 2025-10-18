@@ -40,8 +40,13 @@ export const register = async (req, res) => {
       ip_address: req.ip
     });
 
-    // Send welcome email
-    await sendWelcomeEmail(user);
+    // Send welcome email (non-blocking)
+    try {
+      await sendWelcomeEmail(user);
+    } catch (emailError) {
+      logger.error('Failed to send welcome email:', emailError);
+      // Don't fail registration if email fails
+    }
 
     // Generate token
     const token = generateToken(user);

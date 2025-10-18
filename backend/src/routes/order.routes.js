@@ -35,6 +35,16 @@ const createOrderValidation = [
   })
 ];
 
+const approveOrderValidation = [
+  body('terms_accepted').isBoolean().withMessage('Terms acceptance must be a boolean'),
+  body('terms_accepted').custom((value) => {
+    if (value !== true) {
+      throw new Error('Terms and conditions must be accepted');
+    }
+    return true;
+  })
+];
+
 // Health check endpoint
 router.get('/health', async (req, res) => {
   try {
@@ -115,7 +125,7 @@ router.post('/debug', authenticate, authorize('admin'), (req, res) => {
 
 // Routes
 router.post('/', authenticate, authorize('admin'), validate(createOrderValidation), createOrder);
-router.post('/:orderId/approve', authenticate, approveOrder);
+router.post('/:orderId/approve', authenticate, validate(approveOrderValidation), approveOrder);
 router.put('/:orderId/status', authenticate, authorize('admin'), updateOrderStatus);
 router.get('/stats', authenticate, authorize('admin'), getOrderStats);
 router.get('/recent', authenticate, authorize('admin'), getRecentOrders);
