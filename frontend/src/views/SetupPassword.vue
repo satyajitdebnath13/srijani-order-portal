@@ -155,7 +155,7 @@ const verifyMagicLink = async () => {
 
   try {
     const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/api/auth/verify-magic-link/${token}`
+      `${import.meta.env.VITE_API_URL}/auth/verify-magic-link/${token}`
     )
     
     if (response.data.valid) {
@@ -191,7 +191,7 @@ const handleSubmit = async () => {
 
   try {
     const response = await axios.post(
-      `${import.meta.env.VITE_API_URL}/api/auth/setup-password`,
+      `${import.meta.env.VITE_API_URL}/auth/setup-password`,
       {
         token: route.params.token,
         password: form.value.password,
