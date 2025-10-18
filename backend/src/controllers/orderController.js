@@ -453,10 +453,18 @@ export const approveOrder = async (req, res) => {
     logger.info('Committing transaction');
     await transaction.commit();
 
+    // Fetch order items for email
+    const orderWithItems = await Order.findByPk(orderId, {
+      include: [
+        { model: Customer, as: 'customer', include: [{ model: User, as: 'user' }] },
+        { model: OrderItem, as: 'items' }
+      ]
+    });
+
     // Send confirmation email (non-blocking)
     try {
       logger.info('Sending order confirmation email');
-      await sendOrderConfirmedEmail(order, order.customer);
+      await sendOrderConfirmedEmail(orderWithItems, orderWithItems.customer, orderWithItems.items);
       logger.info('Order confirmation email sent successfully');
     } catch (emailError) {
       logger.error('Failed to send order confirmation email:', emailError);

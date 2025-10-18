@@ -165,7 +165,14 @@ const fetchOrders = async () => {
   }
 };
 
-const formatDate = (date) => format(new Date(date), 'MMM dd, yyyy');
+const formatDate = (date) => {
+  if (!date) return 'N/A';
+  try {
+    return format(new Date(date), 'MMM dd, yyyy');
+  } catch (error) {
+    return 'Invalid date';
+  }
+};
 
 const formatStatus = (status) => status.replace(/_/g, ' ').toUpperCase();
 

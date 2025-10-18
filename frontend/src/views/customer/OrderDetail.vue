@@ -159,11 +159,12 @@
             <h2 class="text-lg font-medium text-gray-900">Shipping Address</h2>
           </div>
           <div class="p-6">
-            <address class="text-sm text-gray-600 not-italic">
+            <address v-if="order.shippingAddress" class="text-sm text-gray-600 not-italic">
               {{ order.shippingAddress.street }}<br>
               {{ order.shippingAddress.city }}, {{ order.shippingAddress.state }} {{ order.shippingAddress.zipCode }}<br>
               {{ order.shippingAddress.country }}
             </address>
+            <p v-else class="text-sm text-gray-500 italic">No shipping address provided</p>
           </div>
         </div>
       </div>

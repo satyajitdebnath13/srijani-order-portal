@@ -64,6 +64,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { ordersAPI } from '@/services/api'
 
 const orders = ref([])
 
