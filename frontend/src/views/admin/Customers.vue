@@ -197,7 +197,7 @@ const stats = ref({
 
 const filters = ref({
   search: '',
-  status: '',
+  status: 'active', // Default to showing only active customers
   sortBy: 'created_at'
 })
 

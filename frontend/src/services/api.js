@@ -157,6 +157,7 @@ export const authAPI = {
   getAllCustomers: (params) => api.get('/auth/customers', { params }),
   updateProfile: (data) => api.put('/auth/profile', data),
   changePassword: (data) => api.put('/auth/password', data),
+  deleteCustomer: (userId) => api.delete(`/auth/customers/${userId}`),
   verifyMagicLink: (token) => api.get(`/auth/verify-magic-link/${token}`),
   setupPassword: (data) => api.post('/auth/setup-password', data)
 };
@@ -193,6 +194,26 @@ export const returnsAPI = {
   getCustomerReturns: (params) => api.get('/returns', { params }),
   getById: (id) => api.get(`/returns/${id}`),
   updateStatus: (id, data) => api.put(`/returns/${id}/status`, data)
+};
+
+// Video API
+export const videoAPI = {
+  getUploadUrl: (orderId) => api.get(`/video/orders/${orderId}/upload-url`),
+  saveVideoToOrder: (orderId, data) => api.post(`/video/orders/${orderId}/video`, data),
+  uploadVideoFile: (orderId, formData) => api.post(`/video/orders/${orderId}/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  getOrderVideo: (orderId) => api.get(`/video/orders/${orderId}/video`)
+};
+
+// Settings API
+export const settingsAPI = {
+  getOrderStatuses: () => api.get('/settings/statuses'),
+  createOrderStatus: (data) => api.post('/settings/statuses', data),
+  updateOrderStatus: (id, data) => api.put(`/settings/statuses/${id}`, data),
+  deleteOrderStatus: (id) => api.delete(`/settings/statuses/${id}`),
+  getSiteSetting: (key) => api.get(`/settings/site/${key}`),
+  updateSiteSetting: (key, data) => api.put(`/settings/site/${key}`, data)
 };
 
 export default api;

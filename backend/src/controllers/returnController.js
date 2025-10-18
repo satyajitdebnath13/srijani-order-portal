@@ -1,5 +1,6 @@
 import db from '../models/index.js';
 import { sendReturnRequestReceivedEmail, sendReturnApprovedEmail } from '../services/emailService.js';
+import { validateVideoLink } from '../services/videoService.js';
 import logger from '../utils/logger.js';
 
 const { Return, ReturnItem, Order, OrderItem, Customer, User, ActivityLog } = db;
@@ -8,33 +9,111 @@ export const createReturn = async (req, res) => {
   const transaction = await db.sequelize.transaction();
   
   try {
-    const { order_id, items, reason, reason_details, return_type } = req.body;
+    const { 
+      order_id, 
+      items, 
+      reason, 
+      reason_details, 
+      return_type,
+      video_url,
+      video_type,
+      video_waived = false,
+      video_waiver_reason
+    } = req.body;
 
-    // Get customer
-    const customer = await Customer.findOne({ 
-      where: { user_id: req.user.id },
-      include: [{ model: User, as: 'user' }]
-    });
+    // Determine if this is admin or customer
+    const isAdmin = req.user.role === 'admin';
+    
+    let customer;
+    let order;
 
-    if (!customer) {
-      await transaction.rollback();
-      return res.status(404).json({ error: 'Customer profile not found' });
-    }
+    if (isAdmin) {
+      // Admin can create return for any customer
+      order = await Order.findByPk(order_id, {
+        include: [{ model: Customer, as: 'customer' }]
+      });
+      
+      if (!order) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      customer = order.customer;
+    } else {
+      // Customer creating their own return
+      customer = await Customer.findOne({ 
+        where: { user_id: req.user.id },
+        include: [{ model: User, as: 'user' }]
+      });
 
-    // Verify order belongs to customer
-    const order = await Order.findOne({
-      where: { id: order_id, customer_id: customer.id }
-    });
+      if (!customer) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'Customer profile not found' });
+      }
 
-    if (!order) {
-      await transaction.rollback();
-      return res.status(404).json({ error: 'Order not found' });
+      // Verify order belongs to customer
+      order = await Order.findOne({
+        where: { id: order_id, customer_id: customer.id }
+      });
+
+      if (!order) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'Order not found' });
+      }
     }
 
     // Check if order is eligible for return
     if (!['delivered', 'completed'].includes(order.status)) {
       await transaction.rollback();
       return res.status(400).json({ error: 'Order is not eligible for return yet' });
+    }
+
+    // Video validation
+    let videoRequired = true;
+    let videoWaivedBy = null;
+
+    if (isAdmin && video_waived) {
+      // Admin can waive video requirement
+      videoRequired = false;
+      videoWaivedBy = req.user.id;
+      
+      if (!video_waiver_reason) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'Video waiver reason is required' });
+      }
+    } else if (!isAdmin) {
+      // Customers must provide video
+      if (!video_url || !video_type) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'Package opening video is required for return requests' });
+      }
+
+      // Validate video link if type is 'link'
+      if (video_type === 'link') {
+        const validation = validateVideoLink(video_url);
+        if (!validation.valid) {
+          await transaction.rollback();
+          return res.status(400).json({ error: validation.error });
+        }
+      }
+    }
+
+    // Validate items array
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'At least one item must be selected for return' });
+    }
+
+    // Validate each item has required fields
+    for (const item of items) {
+      if (!item.order_item_id) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'Each item must have order_item_id' });
+      }
+      if (!item.return_reason) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'Each item must have a return reason' });
+      }
     }
 
     // Create return
@@ -44,17 +123,25 @@ export const createReturn = async (req, res) => {
       reason,
       reason_details,
       return_type,
-      status: 'requested'
+      status: 'requested',
+      video_url: video_url || null,
+      video_type: video_type || null,
+      video_required: videoRequired,
+      video_waived_by: videoWaivedBy,
+      video_waived_at: videoWaivedBy ? new Date() : null,
+      video_waiver_reason: video_waiver_reason || null
     }, { transaction });
 
-    // Create return items
+    // Create return items with individual reasons
     const returnItems = await Promise.all(
       items.map(item => ReturnItem.create({
         return_id: returnRequest.id,
         order_item_id: item.order_item_id,
-        quantity: item.quantity,
+        quantity: item.quantity || 1,
         condition: item.condition,
-        photos: item.photos
+        photos: item.photos,
+        return_reason: item.return_reason,
+        return_description: item.return_description
       }, { transaction }))
     );
 
@@ -67,16 +154,27 @@ export const createReturn = async (req, res) => {
       action: 'return_requested',
       entity_type: 'return',
       entity_id: returnRequest.id,
-      details: { return_number: returnRequest.return_number },
+      details: { 
+        return_number: returnRequest.return_number,
+        items_count: items.length,
+        video_provided: !!video_url,
+        video_waived: video_waived,
+        created_by: isAdmin ? 'admin' : 'customer'
+      },
       ip_address: req.ip
     }, { transaction });
 
     await transaction.commit();
 
     // Send email
-    await sendReturnRequestReceivedEmail(returnRequest, customer, order);
+    try {
+      await sendReturnRequestReceivedEmail(returnRequest, customer, order);
+    } catch (emailError) {
+      logger.error('Failed to send return request email:', emailError);
+      // Don't fail the request if email fails
+    }
 
-    logger.info(`Return request created: ${returnRequest.return_number}`);
+    logger.info(`Return request created: ${returnRequest.return_number} by ${isAdmin ? 'admin' : 'customer'} ${req.user.email}`);
 
     res.status(201).json({
       message: 'Return request submitted successfully',

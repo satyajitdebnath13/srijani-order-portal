@@ -15,6 +15,7 @@ import orderRoutes from './routes/order.routes.js';
 import supportRoutes from './routes/support.routes.js';
 import returnRoutes from './routes/return.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
+import videoRoutes from './routes/video.routes.js';
 
 // Load environment variables
 dotenv.config();
@@ -92,6 +93,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/returns', returnRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/video', videoRoutes);
 
 // Static files (for uploads, invoices, etc.)
 app.use('/uploads', express.static('uploads'));

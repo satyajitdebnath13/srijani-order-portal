@@ -35,6 +35,15 @@ const ReturnItem = sequelize.define('ReturnItem', {
   photos: {
     type: DataTypes.JSONB,
     allowNull: true
+  },
+  // Individual item return reason
+  return_reason: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  return_description: {
+    type: DataTypes.TEXT,
+    allowNull: true
   }
 }, {
   tableName: 'return_items'

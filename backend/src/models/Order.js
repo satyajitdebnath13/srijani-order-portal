@@ -123,6 +123,19 @@ const Order = sequelize.define('Order', {
   confirmed_at: {
     type: DataTypes.DATE,
     allowNull: true
+  },
+  // Package opening video fields
+  package_video_url: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  package_video_type: {
+    type: DataTypes.ENUM('file', 'link'),
+    allowNull: true
+  },
+  video_uploaded_at: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
 }, {
   tableName: 'orders'

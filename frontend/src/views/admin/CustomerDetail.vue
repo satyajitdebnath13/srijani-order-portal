@@ -122,13 +122,33 @@
       <!-- Order History -->
       <div class="card mb-6">
         <div class="p-6 border-b border-gray-200">
-          <h2 class="text-xl font-semibold text-gray-900">Order History</h2>
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl font-semibold text-gray-900">Order History</h2>
+            <div class="flex gap-2">
+              <button
+                v-for="filter in orderFilters"
+                :key="filter.value"
+                @click="selectedOrderFilter = filter.value"
+                :class="[
+                  'px-3 py-1 text-sm font-medium rounded-lg transition-colors',
+                  selectedOrderFilter === filter.value
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ]"
+              >
+                {{ filter.label }}
+                <span v-if="filter.value !== 'all'" class="ml-1 text-xs">
+                  ({{ getOrderCountByStatus(filter.value) }})
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
         <div v-if="loadingOrders" class="p-6 text-center">
           <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
         </div>
-        <div v-else-if="orders.length === 0" class="p-6 text-center text-gray-500">
-          No orders found for this customer.
+        <div v-else-if="filteredOrders.length === 0" class="p-6 text-center text-gray-500">
+          No orders found{{ selectedOrderFilter !== 'all' ? ' with this status' : '' }}.
         </div>
         <div v-else class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200">
@@ -142,7 +162,14 @@
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="order in orders" :key="order.id" class="hover:bg-gray-50">
+              <tr 
+                v-for="order in filteredOrders" 
+                :key="order.id" 
+                :class="[
+                  'hover:bg-gray-50 transition-colors',
+                  order.status === 'pending_approval' ? 'bg-yellow-50 border-l-4 border-yellow-400' : ''
+                ]"
+              >
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {{ order.order_number }}
                 </td>
@@ -217,6 +244,47 @@
         </div>
       </div>
 
+      <!-- Danger Zone -->
+      <div class="card border-2 border-red-200 mt-6">
+        <div class="p-6 border-b border-red-200 bg-red-50">
+          <h2 class="text-xl font-semibold text-red-900 flex items-center">
+            <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+            Danger Zone
+          </h2>
+        </div>
+        <div class="p-6">
+          <div class="bg-white rounded-lg border border-red-200 p-4">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Delete Customer Account</h3>
+            <p class="text-gray-600 mb-4">
+              This will deactivate the customer account. The customer will no longer be able to log in, 
+              but all order history and data will be preserved for record-keeping purposes.
+            </p>
+            <div class="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
+              <p class="text-sm text-yellow-800">
+                <strong>⚠️ Warning:</strong> This action will:
+              </p>
+              <ul class="list-disc list-inside text-sm text-yellow-800 mt-2 space-y-1">
+                <li>Prevent the customer from logging in</li>
+                <li>Hide the customer from the active customer list</li>
+                <li>Preserve all order and support ticket history</li>
+                <li>Can be reversed by reactivating the account</li>
+              </ul>
+            </div>
+            <button
+              @click="showDeleteModal = true"
+              class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold flex items-center"
+            >
+              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+              Delete Customer Account
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Password Reset Modal -->
       <div v-if="showResetModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
         <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
@@ -241,6 +309,59 @@
           </button>
         </div>
       </div>
+
+      <!-- Delete Confirmation Modal -->
+      <div v-if="showDeleteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+          <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold text-gray-900 mb-4 text-center">Delete Customer Account?</h3>
+          <p class="text-gray-600 mb-4 text-center">
+            Are you sure you want to delete <strong>{{ customer.user.name }}</strong>'s account?
+          </p>
+          <div class="bg-red-50 border border-red-200 rounded p-3 mb-4">
+            <p class="text-sm text-red-800">
+              <strong>This will:</strong>
+            </p>
+            <ul class="list-disc list-inside text-sm text-red-800 mt-2 space-y-1">
+              <li>Deactivate the customer account immediately</li>
+              <li>Prevent {{ customer.user.name }} from logging in</li>
+              <li>Preserve all order and ticket history</li>
+            </ul>
+          </div>
+          <div class="mb-4">
+            <label class="flex items-center">
+              <input
+                type="checkbox"
+                v-model="deleteConfirmed"
+                class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+              />
+              <span class="ml-2 text-sm text-gray-700">
+                I understand this action will deactivate the customer account
+              </span>
+            </label>
+          </div>
+          <div class="flex gap-3">
+            <button
+              @click="showDeleteModal = false; deleteConfirmed = false"
+              class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
+              :disabled="deleting"
+            >
+              Cancel
+            </button>
+            <button
+              @click="handleDeleteCustomer"
+              :disabled="!deleteConfirmed || deleting"
+              class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ deleting ? 'Deleting...' : 'Delete Account' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div v-else-if="loading" class="p-6 text-center text-gray-600">
@@ -254,7 +375,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { format } from 'date-fns'
@@ -270,6 +391,28 @@ const sendingReset = ref(false)
 const showResetModal = ref(false)
 const resetLink = ref('')
 const resetLinkInput = ref(null)
+const showDeleteModal = ref(false)
+const deleteConfirmed = ref(false)
+const deleting = ref(false)
+const selectedOrderFilter = ref('all')
+
+// Order filter options
+const orderFilters = [
+  { label: 'All', value: 'all' },
+  { label: 'Pending', value: 'pending_approval' },
+  { label: 'Confirmed', value: 'confirmed' },
+  { label: 'In Production', value: 'in_production' },
+  { label: 'Shipped', value: 'shipped' },
+  { label: 'Delivered', value: 'delivered' }
+]
+
+// Computed: Filtered orders based on selected filter
+const filteredOrders = computed(() => {
+  if (selectedOrderFilter.value === 'all') {
+    return orders.value
+  }
+  return orders.value.filter(order => order.status === selectedOrderFilter.value)
+})
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
 
@@ -395,6 +538,34 @@ const getTicketStatusClass = (status) => {
     'closed': 'bg-gray-100 text-gray-800'
   }
   return classes[status] || 'bg-gray-100 text-gray-800'
+}
+
+const getOrderCountByStatus = (status) => {
+  return orders.value.filter(order => order.status === status).length
+}
+
+const handleDeleteCustomer = async () => {
+  if (!deleteConfirmed.value) return
+  
+  deleting.value = true
+  try {
+    const token = localStorage.getItem('token')
+    await axios.delete(`${API_URL}/auth/customers/${customer.value.user.id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    
+    alert(`Customer account for ${customer.value.user.name} has been deactivated successfully.`)
+    
+    // Redirect to customers list
+    window.location.href = '/admin/customers'
+  } catch (error) {
+    console.error('Error deleting customer:', error)
+    alert('Failed to delete customer account. Please try again.')
+  } finally {
+    deleting.value = false
+    showDeleteModal.value = false
+    deleteConfirmed.value = false
+  }
 }
 
 onMounted(() => {

@@ -324,7 +324,7 @@ const sendOrderStatusUpdateEmail = async (order, customer, newStatus) => {
     'cancelled': 'Your order has been cancelled.'
   };
 
-  const content = `
+  let content = `
     <h2>Order Status Update</h2>
     <p>Dear ${customer.name},</p>
     
@@ -334,8 +334,44 @@ const sendOrderStatusUpdateEmail = async (order, customer, newStatus) => {
       <h3>New Status: ${newStatus.toUpperCase()}</h3>
       <p>${statusMessages[newStatus] || 'Your order status has been updated.'}</p>
     </div>
-    
-    <p><a href="${process.env.FRONTEND_URL}/login" class="button">View Order Details</a></p>
+  `;
+
+  // Add video requirement notice for delivered orders
+  if (newStatus === 'delivered') {
+    content += `
+    <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 20px; margin: 24px 0; border-radius: 8px;">
+      <h3 style="color: #92400E; margin-top: 0; font-size: 18px; display: flex; align-items: center;">
+        <span style="font-size: 24px; margin-right: 8px;">📹</span>
+        Important: Package Opening Video Required
+      </h3>
+      <p style="color: #78350F; margin: 12px 0;">
+        <strong>To ensure smooth processing of any potential returns, please record a video while opening your package.</strong>
+      </p>
+      
+      <p style="color: #78350F; margin: 12px 0;">This video should show:</p>
+      <ul style="color: #78350F; margin: 8px 0; padding-left: 20px;">
+        <li>The sealed package before opening</li>
+        <li>The opening process</li>
+        <li>All items inside the package</li>
+      </ul>
+      
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${process.env.FRONTEND_URL}/customer/orders/${order.id}" 
+           style="display: inline-block; padding: 14px 28px; background: #4F46E5; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+          📹 Upload Package Opening Video
+        </a>
+      </div>
+      
+      <p style="font-size: 13px; color: #78716C; margin: 12px 0;">
+        <strong>Note:</strong> A package opening video is required to process any return requests. 
+        Please upload it within 7 days of delivery.
+      </p>
+    </div>
+    `;
+  }
+
+  content += `
+    <p><a href="${process.env.FRONTEND_URL}/customer/orders/${order.id}" class="button">View Order Details</a></p>
     
     <p>If you have any questions, please contact our support team.</p>
     

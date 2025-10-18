@@ -10,7 +10,8 @@ import {
   getAllCustomers,
   verifyMagicLink,
   setupPassword,
-  sendPasswordResetLink
+  sendPasswordResetLink,
+  deleteCustomer
 } from '../controllers/authController.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { validateRequest } from '../middleware/validateRequest.js';
@@ -52,6 +53,9 @@ router.post('/setup-password', setupPasswordValidation, validateRequest, setupPa
 
 // Admin: Send password reset link to customer
 router.post('/send-password-reset/:userId', authenticate, authorize('admin'), sendPasswordResetLink);
+
+// Admin: Delete (soft delete) customer
+router.delete('/customers/:userId', authenticate, authorize('admin'), deleteCustomer);
 
 export default router;
 

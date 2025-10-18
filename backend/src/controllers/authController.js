@@ -540,3 +540,62 @@ export const setupPassword = async (req, res) => {
   }
 };
 
+// Admin: Soft delete a customer
+export const deleteCustomer = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Only admins can delete customers
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const user = await User.findByPk(userId, {
+      include: [{ model: Customer, as: 'customerProfile' }]
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Prevent deleting admin users
+    if (user.role === 'admin') {
+      return res.status(403).json({ error: 'Cannot delete admin users' });
+    }
+
+    // Soft delete: mark as inactive
+    await user.update({
+      is_active: false
+    });
+
+    // Log activity
+    await ActivityLog.create({
+      user_id: req.user.id,
+      action: 'customer_deleted',
+      entity_type: 'user',
+      entity_id: user.id,
+      details: { 
+        deleted_user_email: user.email,
+        deleted_user_name: user.name,
+        deletion_type: 'soft_delete'
+      },
+      ip_address: req.ip
+    });
+
+    logger.info(`Customer soft deleted: ${user.email} by admin: ${req.user.email}`);
+
+    res.json({
+      message: 'Customer account deactivated successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        is_active: user.is_active
+      }
+    });
+  } catch (error) {
+    logger.error('Delete customer error:', error);
+    res.status(500).json({ error: 'Failed to delete customer' });
+  }
+};
+

@@ -81,6 +81,35 @@ const Return = sequelize.define('Return', {
   completed_at: {
     type: DataTypes.DATE,
     allowNull: true
+  },
+  // Video fields
+  video_url: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  video_type: {
+    type: DataTypes.ENUM('file', 'link'),
+    allowNull: true
+  },
+  video_required: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  video_waived_by: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
+  video_waived_at: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  video_waiver_reason: {
+    type: DataTypes.TEXT,
+    allowNull: true
   }
 }, {
   tableName: 'returns'
