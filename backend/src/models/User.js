@@ -17,7 +17,7 @@ const User = sequelize.define('User', {
   },
   password: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: true  // Changed to allow null for magic link users
   },
   name: {
     type: DataTypes.STRING,
@@ -43,6 +43,19 @@ const User = sequelize.define('User', {
   last_login: {
     type: DataTypes.DATE,
     allowNull: true
+  },
+  // Magic link fields
+  password_setup_token: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  password_setup_expires: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  password_setup_used: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   }
 }, {
   tableName: 'users',

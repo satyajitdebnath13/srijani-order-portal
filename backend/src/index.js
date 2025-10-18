@@ -14,6 +14,7 @@ import authRoutes from './routes/auth.routes.js';
 import orderRoutes from './routes/order.routes.js';
 import supportRoutes from './routes/support.routes.js';
 import returnRoutes from './routes/return.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
 
 // Load environment variables
 dotenv.config();
@@ -90,6 +91,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/returns', returnRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Static files (for uploads, invoices, etc.)
 app.use('/uploads', express.static('uploads'));

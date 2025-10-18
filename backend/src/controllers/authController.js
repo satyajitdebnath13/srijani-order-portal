@@ -1,7 +1,8 @@
 import db from '../models/index.js';
-import { generateToken } from '../utils/jwt.js';
+import { generateToken, generateSecureToken } from '../utils/jwt.js';
 import { sendWelcomeEmail } from '../services/emailService.js';
 import logger from '../utils/logger.js';
+import { Op } from 'sequelize';
 
 const { User, Customer, Address, ActivityLog } = db;
 
@@ -345,6 +346,197 @@ export const getAllCustomers = async (req, res) => {
   } catch (error) {
     logger.error('Get all customers error:', error);
     res.status(500).json({ error: 'Failed to get customers' });
+  }
+};
+
+// Verify magic link token and get user info
+export const verifyMagicLink = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    // Find user with valid token
+    const user = await User.findOne({
+      where: {
+        password_setup_token: token,
+        password_setup_expires: { [Op.gt]: new Date() },
+        password_setup_used: false
+      },
+      include: [
+        {
+          model: Customer,
+          as: 'customerProfile',
+          required: false
+        }
+      ]
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired magic link' });
+    }
+
+    // Return user info (without password)
+    res.json({
+      valid: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    logger.error('Verify magic link error:', error);
+    res.status(500).json({ error: 'Failed to verify magic link' });
+  }
+};
+
+// Setup password using magic link
+// Admin: Send password reset link to customer
+export const sendPasswordResetLink = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Only admins can send password reset links
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const user = await User.findByPk(userId, {
+      include: [{ model: Customer, as: 'customerProfile' }]
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Generate reset token
+    const resetToken = generateSecureToken();
+    const resetExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    await user.update({
+      password_setup_token: resetToken,
+      password_setup_expires: resetExpiry,
+      password_setup_used: false
+    });
+
+    // Generate reset URL
+    const resetUrl = `${process.env.FRONTEND_URL}/setup-password/${resetToken}`;
+
+    // Send email (non-blocking)
+    try {
+      const { sendEmail, getEmailWrapper } = await import('../services/brevoEmailService.js');
+      
+      const subject = 'Password Reset Request - Srijani';
+      const content = `
+        <h2>Password Reset Request</h2>
+        <p>Dear ${user.name},</p>
+        <p>A password reset has been requested for your account. Click the button below to set a new password:</p>
+        <p style="text-align: center; margin: 30px 0;">
+          <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">
+            Reset Password
+          </a>
+        </p>
+        <p><strong>Note:</strong> This link will expire in 24 hours for security purposes.</p>
+        <p>If you did not request this reset, please ignore this email or contact support.</p>
+        <p>Best regards,<br>Srijani Team</p>
+      `;
+
+      await sendEmail(user.email, subject, getEmailWrapper(content), 'password_reset');
+    } catch (emailError) {
+      logger.error('Failed to send password reset email:', emailError);
+    }
+
+    // Log activity
+    await ActivityLog.create({
+      user_id: req.user.id,
+      action: 'password_reset_link_sent',
+      entity_type: 'user',
+      entity_id: user.id,
+      details: { target_email: user.email },
+      ip_address: req.ip
+    });
+
+    logger.info(`Password reset link sent to user: ${user.email} by admin: ${req.user.email}`);
+
+    res.json({
+      message: 'Password reset link sent successfully',
+      resetUrl // Include for admin to copy if needed
+    });
+  } catch (error) {
+    logger.error('Send password reset link error:', error);
+    res.status(500).json({ error: 'Failed to send password reset link' });
+  }
+};
+
+export const setupPassword = async (req, res) => {
+  try {
+    const { token, password, confirmPassword } = req.body;
+
+    if (!token || !password || !confirmPassword) {
+      return res.status(400).json({ error: 'Token, password, and confirmation are required' });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({ error: 'Passwords do not match' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+
+    // Find user with valid token
+    const user = await User.findOne({
+      where: {
+        password_setup_token: token,
+        password_setup_expires: { [Op.gt]: new Date() },
+        password_setup_used: false
+      }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired magic link' });
+    }
+
+    // Update user password and mark token as used
+    await user.update({
+      password: password, // Will be hashed by model hook
+      password_setup_token: null,
+      password_setup_expires: null,
+      password_setup_used: true,
+      email_verified: true
+    });
+
+    // Log activity
+    await ActivityLog.create({
+      user_id: user.id,
+      action: 'password_setup_completed',
+      entity_type: 'user',
+      entity_id: user.id,
+      ip_address: req.ip
+    });
+
+    // Generate JWT token for automatic login
+    const jwtToken = generateToken(user);
+
+    logger.info(`Password setup completed for user: ${user.email}`);
+
+    res.json({
+      message: 'Password set successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      },
+      token: jwtToken
+    });
+  } catch (error) {
+    logger.error('Setup password error:', error);
+    res.status(500).json({ error: 'Failed to setup password' });
   }
 };
 

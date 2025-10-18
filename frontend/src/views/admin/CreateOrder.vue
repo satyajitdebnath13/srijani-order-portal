@@ -394,6 +394,66 @@
           </div>
         </div>
       </form>
+
+      <!-- Success Modal -->
+      <div v-if="showSuccessModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <div class="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 p-8">
+          <div class="text-center">
+            <svg class="mx-auto h-16 w-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <h3 class="mt-4 text-2xl font-bold text-gray-900">Order Created Successfully!</h3>
+            <p class="mt-2 text-gray-600">{{ createdOrderData?.message }}</p>
+          </div>
+
+          <div class="mt-6 space-y-4">
+            <div class="bg-gray-50 rounded-lg p-4">
+              <h4 class="text-sm font-medium text-gray-900 mb-2">Order Details:</h4>
+              <div class="space-y-1 text-sm text-gray-600">
+                <p><strong>Order Number:</strong> {{ createdOrderData?.order?.order_number }}</p>
+                <p><strong>Total Amount:</strong> €{{ createdOrderData?.order?.total_amount }}</p>
+                <p><strong>Status:</strong> Pending Customer Approval</p>
+              </div>
+            </div>
+
+            <!-- Magic Link Section (only for new customers) -->
+            <div v-if="createdOrderData?.magicLink" class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+              <h4 class="text-sm font-semibold text-blue-900 mb-2 flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                </svg>
+                WhatsApp Link for Customer
+              </h4>
+              <div class="bg-white rounded border border-blue-300 p-3 mb-3">
+                <input
+                  :value="createdOrderData.magicLink"
+                  readonly
+                  class="w-full text-xs font-mono text-gray-700 bg-transparent border-none focus:outline-none"
+                />
+              </div>
+              <button
+                @click="copyMagicLink"
+                class="w-full btn btn-primary"
+              >
+                📋 Copy Link for WhatsApp
+              </button>
+              <p class="mt-2 text-xs text-blue-700">
+                ⏰ Link expires in 24 hours<br>
+                📧 Email also sent automatically to customer
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-6 flex space-x-3">
+            <button @click="closeModal" class="flex-1 btn btn-secondary">
+              Close
+            </button>
+            <button @click="viewOrder" class="flex-1 btn btn-primary">
+              View Order Details
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -489,6 +549,9 @@ const fetchCustomers = async () => {
   }
 }
 
+const showSuccessModal = ref(false)
+const createdOrderData = ref(null)
+
 const handleSubmit = async () => {
   if (!isFormValid.value) return
   
@@ -519,16 +582,43 @@ const handleSubmit = async () => {
 
     const response = await ordersAPI.create(orderData)
     
-    // Show success message
-    alert(response.data.message)
-    
-    // Redirect to orders list
-    router.push('/admin/orders')
+    // Store created order data for modal
+    createdOrderData.value = response.data
+    showSuccessModal.value = true
   } catch (error) {
     console.error('Error creating order:', error)
     alert(error.response?.data?.error || 'Failed to create order')
   } finally {
     loading.value = false
+  }
+}
+
+const copyMagicLink = async () => {
+  if (!createdOrderData.value?.magicLink) return
+  
+  try {
+    await navigator.clipboard.writeText(createdOrderData.value.magicLink)
+    alert('Magic link copied to clipboard! You can now send it via WhatsApp.')
+  } catch (err) {
+    // Fallback for older browsers
+    const textArea = document.createElement('textarea')
+    textArea.value = createdOrderData.value.magicLink
+    document.body.appendChild(textArea)
+    textArea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textArea)
+    alert('Magic link copied to clipboard!')
+  }
+}
+
+const closeModal = () => {
+  showSuccessModal.value = false
+  router.push('/admin/orders')
+}
+
+const viewOrder = () => {
+  if (createdOrderData.value?.order?.id) {
+    router.push(`/admin/orders/${createdOrderData.value.order.id}`)
   }
 }
 

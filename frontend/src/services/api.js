@@ -44,7 +44,9 @@ export const authAPI = {
   getAddresses: () => api.get('/auth/addresses'),
   getAllCustomers: (params) => api.get('/auth/customers', { params }),
   updateProfile: (data) => api.put('/auth/profile', data),
-  changePassword: (data) => api.put('/auth/password', data)
+  changePassword: (data) => api.put('/auth/password', data),
+  verifyMagicLink: (token) => api.get(`/auth/verify-magic-link/${token}`),
+  setupPassword: (data) => api.post('/auth/setup-password', data)
 };
 
 // Orders API
@@ -54,6 +56,7 @@ export const ordersAPI = {
   getCustomerOrders: (params) => api.get('/orders', { params }),
   getStats: () => api.get('/orders/stats'),
   getRecent: () => api.get('/orders/recent'),
+  getStatuses: () => api.get('/orders/statuses'),
   getById: (id) => api.get(`/orders/${id}`),
   approve: (id, data) => api.post(`/orders/${id}/approve`, data),
   updateStatus: (id, data) => api.put(`/orders/${id}/status`, data),

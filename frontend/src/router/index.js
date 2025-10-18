@@ -19,6 +19,12 @@ const routes = [
     component: () => import('@/views/Register.vue'),
     meta: { guest: true }
   },
+  {
+    path: '/setup-password/:token',
+    name: 'SetupPassword',
+    component: () => import('@/views/SetupPassword.vue'),
+    meta: { guest: true }
+  },
   
   // Admin Routes
   {
@@ -52,6 +58,11 @@ const routes = [
         component: () => import('@/views/admin/Customers.vue')
       },
       {
+        path: 'customers/:id',
+        name: 'CustomerDetail',
+        component: () => import('@/views/admin/CustomerDetail.vue')
+      },
+      {
         path: 'support',
         name: 'AdminSupport',
         component: () => import('@/views/admin/Support.vue')
@@ -70,6 +81,11 @@ const routes = [
         path: 'returns/:id',
         name: 'AdminReturnDetail',
         component: () => import('@/views/admin/ReturnDetail.vue')
+      },
+      {
+        path: 'settings',
+        name: 'Settings',
+        component: () => import('@/views/admin/Settings.vue')
       }
     ]
   },

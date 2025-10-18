@@ -3,10 +3,12 @@ import db from '../models/index.js';
 import { 
   sendOrderApprovalEmail, 
   sendOrderApprovalEmailWithCredentials,
+  sendOrderApprovalEmailWithMagicLink,
   sendOrderConfirmedEmail,
   sendOrderStatusUpdateEmail 
 } from '../services/brevoEmailService.js';
 import { generateInvoicePDF } from '../services/pdfService.js';
+import { generateSecureToken } from '../utils/jwt.js';
 import logger from '../utils/logger.js';
 
 const { 
@@ -100,22 +102,24 @@ export const createOrder = async (req, res) => {
         return res.status(409).json({ error: 'Customer with this email already exists' });
       }
 
-      // Generate password: first 3 letters of name + last 4 digits of timestamp
-      const namePrefix = customer_name.toLowerCase().replace(/[^a-z]/g, '').substring(0, 3);
-      const timestampSuffix = Date.now().toString().slice(-4);
-      const generatedPassword = `${namePrefix}${timestampSuffix}`;
+      // Generate magic link token
+      const magicLinkToken = generateSecureToken();
+      const magicLinkExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-      // Create user account
+      // Create user account with magic link (no password yet)
       const user = await User.create({
         email: customer_email,
-        password: generatedPassword,
+        password: null, // No password initially
         name: customer_name,
         phone: customer_phone || null,
-        role: 'customer'
+        role: 'customer',
+        password_setup_token: magicLinkToken,
+        password_setup_expires: magicLinkExpiry,
+        password_setup_used: false
       }, { transaction });
 
-      // Store the generated password for email
-      user.generatedPassword = generatedPassword;
+      // Store the magic link token for later use
+      user.magicLinkToken = magicLinkToken;
 
       // Create customer profile
       customer = await Customer.create({
@@ -227,12 +231,17 @@ export const createOrder = async (req, res) => {
 
     await transaction.commit();
 
+    // Generate magic link URL
+    const magicLinkUrl = isNewCustomer && customer.user.magicLinkToken
+      ? `${process.env.FRONTEND_URL}/setup-password/${customer.user.magicLinkToken}?order=${order.id}`
+      : null;
+
     // Send approval email to customer (non-blocking)
     try {
       let emailResult;
-      if (isNewCustomer) {
-        // For new customers, include login credentials in email
-        emailResult = await sendOrderApprovalEmailWithCredentials(order, customer, orderItems, customer.user.generatedPassword);
+      if (isNewCustomer && magicLinkUrl) {
+        // For new customers, send magic link email
+        emailResult = await sendOrderApprovalEmailWithMagicLink(order, customer, orderItems, magicLinkUrl);
       } else {
         // For existing customers, send regular approval email
         emailResult = await sendOrderApprovalEmail(order, customer, orderItems);
@@ -252,13 +261,15 @@ export const createOrder = async (req, res) => {
 
     res.status(201).json({
       message: isNewCustomer 
-        ? 'Order created successfully, customer account created, and approval email sent with login credentials'
+        ? 'Order created successfully, customer account created, and approval email sent with magic link'
         : 'Order created successfully and sent for customer approval',
       order: {
         ...order.toJSON(),
         items: orderItems
       },
-      isNewCustomer
+      isNewCustomer,
+      magicLink: magicLinkUrl, // Include magic link for admin to copy
+      magicLinkExpiry: isNewCustomer ? customer.user.password_setup_expires : null
     });
   } catch (error) {
     await transaction.rollback();
@@ -557,7 +568,11 @@ export const getOrderById = async (req, res) => {
         {
           model: Customer,
           as: 'customer',
-          include: [{ model: User, as: 'user' }]
+          include: [{ 
+            model: User, 
+            as: 'user',
+            attributes: ['id', 'name', 'email', 'phone', 'password_setup_token', 'password_setup_expires', 'password_setup_used']
+          }]
         },
         {
           model: OrderItem,
@@ -591,10 +606,37 @@ export const getOrderById = async (req, res) => {
       }
     }
 
-    res.json({ order });
+    // Generate magic link for admin if customer hasn't set password yet
+    let magicLink = null;
+    if (req.user.role === 'admin' && order.customer.user.password_setup_token && !order.customer.user.password_setup_used) {
+      magicLink = `${process.env.FRONTEND_URL}/setup-password/${order.customer.user.password_setup_token}?order=${order.id}`;
+    }
+
+    res.json({ 
+      order,
+      magicLink // Include magic link for admin to copy
+    });
   } catch (error) {
     logger.error('Get order error:', error);
     res.status(500).json({ error: 'Failed to fetch order' });
+  }
+};
+
+// Get available order statuses
+export const getOrderStatuses = async (req, res) => {
+  try {
+    const { OrderStatus } = db;
+    
+    const statuses = await OrderStatus.findAll({
+      where: { is_active: true },
+      order: [['display_order', 'ASC']],
+      attributes: ['id', 'value', 'label', 'description', 'color']
+    });
+
+    res.json({ statuses });
+  } catch (error) {
+    logger.error('Get order statuses error:', error);
+    res.status(500).json({ error: 'Failed to get order statuses' });
   }
 };
 
@@ -745,6 +787,7 @@ export default {
   updateOrderStatus,
   getOrders,
   getOrderById,
+  getOrderStatuses,
   downloadInvoice
 };
 

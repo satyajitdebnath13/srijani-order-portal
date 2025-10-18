@@ -13,6 +13,8 @@ import PolicyVersion from './PolicyVersion.js';
 import ConsentLog from './ConsentLog.js';
 import EmailLog from './EmailLog.js';
 import ActivityLog from './ActivityLog.js';
+import OrderStatus from './OrderStatus.js';
+import SiteSetting from './SiteSetting.js';
 
 // Define relationships
 
@@ -96,6 +98,10 @@ ConsentLog.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
 User.hasMany(ActivityLog, { foreignKey: 'user_id', as: 'activities' });
 ActivityLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+// User <-> SiteSetting (One-to-Many for updates)
+User.hasMany(SiteSetting, { foreignKey: 'updated_by', as: 'settingUpdates' });
+SiteSetting.belongsTo(User, { foreignKey: 'updated_by', as: 'updatedBy' });
+
 // Export all models and sequelize instance
 const db = {
   sequelize,
@@ -112,7 +118,9 @@ const db = {
   PolicyVersion,
   ConsentLog,
   EmailLog,
-  ActivityLog
+  ActivityLog,
+  OrderStatus,
+  SiteSetting
 };
 
 export default db;

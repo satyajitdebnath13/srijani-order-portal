@@ -400,10 +400,61 @@ const sendSupportTicketEmail = async (ticket, customer) => {
   return await sendEmail(customer.user.email, subject, getEmailWrapper(content), 'support_ticket');
 };
 
+// Order approval email with magic link for new customers
+const sendOrderApprovalEmailWithMagicLink = async (order, customer, orderItems, magicLinkUrl) => {
+  const subject = `Please confirm your order #${order.order_number} - Srijani`;
+  
+  const orderItemsHtml = orderItems.map(item => `
+    <div class="item-row">
+      <strong>${item.product_name || 'N/A'}</strong><br>
+      Quantity: ${item.quantity || 0} | Price: €${item.unit_price || 0} | Subtotal: €${item.subtotal || 0}
+    </div>
+  `).join('');
+
+  const content = `
+    <h2>Welcome! Order Confirmation Required</h2>
+    <p>Dear ${customer.user.name},</p>
+    
+    <p>Your order <strong>${order.order_number}</strong> has been created and requires your confirmation.</p>
+    
+    <div class="order-details">
+      <h3>Order Details</h3>
+      ${orderItemsHtml}
+      <div class="total">Total Amount: €${order.total_amount}</div>
+    </div>
+    
+    <div style="background-color: #E3F2FD; border-left: 4px solid #2196F3; padding: 15px; margin: 20px 0;">
+      <h3 style="margin: 0 0 10px 0; color: #1976D2;">🔐 Secure Account Setup</h3>
+      <p>Click the button below to set up your password and confirm your order:</p>
+    </div>
+    
+    <p style="text-align: center; margin: 30px 0;">
+      <a href="${magicLinkUrl}" class="button">Set Up Password & Confirm Order</a>
+    </p>
+    
+    <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0;">
+      <p><strong>⚠️ Important: Please read before confirming</strong></p>
+      <p>By confirming your order, you agree to our:</p>
+      <ul>
+        <li><a href="${process.env.FRONTEND_URL}/legal/terms">Terms & Conditions</a></li>
+        <li><a href="${process.env.FRONTEND_URL}/legal/privacy">Privacy Policy</a></li>
+      </ul>
+    </div>
+    
+    <p><strong>Note:</strong> This link will expire in 24 hours for security purposes.</p>
+    <p>If you have any questions, please contact our support team.</p>
+    
+    <p>Best regards,<br>Srijani Team</p>
+  `;
+
+  return await sendEmail(customer.user.email, subject, getEmailWrapper(content), 'order_approval_magic_link');
+};
+
 export {
   sendEmail,
   sendOrderApprovalEmailWithCredentials,
   sendOrderApprovalEmail,
+  sendOrderApprovalEmailWithMagicLink,
   sendOrderConfirmedEmail,
   sendOrderStatusUpdateEmail,
   sendReturnRequestEmail,

@@ -6,6 +6,7 @@ import {
   updateOrderStatus,
   getOrders,
   getOrderById,
+  getOrderStatuses,
   downloadInvoice,
   getOrderStats,
   getRecentOrders
@@ -118,6 +119,7 @@ router.post('/:orderId/approve', authenticate, approveOrder);
 router.put('/:orderId/status', authenticate, authorize('admin'), updateOrderStatus);
 router.get('/stats', authenticate, authorize('admin'), getOrderStats);
 router.get('/recent', authenticate, authorize('admin'), getRecentOrders);
+router.get('/statuses', authenticate, authorize('admin'), getOrderStatuses); // Get available statuses
 router.get('/', authenticate, getOrders);
 router.get('/:orderId', authenticate, getOrderById);
 router.get('/:orderId/invoice', authenticate, downloadInvoice);

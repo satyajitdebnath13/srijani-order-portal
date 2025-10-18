@@ -170,8 +170,9 @@
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button class="text-blue-600 hover:text-blue-900 mr-3">View</button>
-                  <button class="text-gray-600 hover:text-gray-900">Edit</button>
+                  <router-link :to="`/admin/customers/${customer.user.id}`" class="text-blue-600 hover:text-blue-900 mr-3">
+                    View Details
+                  </router-link>
                 </td>
               </tr>
             </tbody>

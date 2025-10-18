@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 export const generateToken = (user) => {
   return jwt.sign(
@@ -24,5 +25,10 @@ export const verifyToken = (token) => {
 
 export const decodeToken = (token) => {
   return jwt.decode(token);
+};
+
+// Generate secure random token for magic links
+export const generateSecureToken = () => {
+  return crypto.randomBytes(32).toString('hex');
 };
 
