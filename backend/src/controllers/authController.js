@@ -274,19 +274,18 @@ export const getAllCustomers = async (req, res) => {
     const { search, status, sortBy, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
-    // Build where clause
-    const whereClause = {};
-    if (status) {
-      whereClause.is_active = status === 'active';
-    }
-
-    // Build user where clause for search
+    // Build user where clause for search and status
     const userWhereClause = {};
     if (search) {
       userWhereClause[db.Sequelize.Op.or] = [
         { name: { [db.Sequelize.Op.iLike]: `%${search}%` } },
         { email: { [db.Sequelize.Op.iLike]: `%${search}%` } }
       ];
+    }
+    
+    // Add status filter to user where clause
+    if (status) {
+      userWhereClause.is_active = status === 'active';
     }
 
     // Build order clause
@@ -308,7 +307,6 @@ export const getAllCustomers = async (req, res) => {
     }
 
     const customers = await Customer.findAndCountAll({
-      where: whereClause,
       include: [
         {
           model: User,
@@ -346,6 +344,42 @@ export const getAllCustomers = async (req, res) => {
   } catch (error) {
     logger.error('Get all customers error:', error);
     res.status(500).json({ error: 'Failed to get customers' });
+  }
+};
+
+// Get customer by ID (for admin)
+export const getCustomerById = async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    // Only admins can view customer details
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const customer = await Customer.findByPk(customerId, {
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'name', 'email', 'phone', 'is_active', 'created_at', 'last_login']
+        },
+        {
+          model: Address,
+          as: 'addresses',
+          attributes: ['id', 'type', 'full_name', 'address_line1', 'address_line2', 'city', 'state', 'postal_code', 'country', 'phone', 'is_default']
+        }
+      ]
+    });
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    res.json({ customer });
+  } catch (error) {
+    logger.error('Get customer by ID error:', error);
+    res.status(500).json({ error: 'Failed to get customer details' });
   }
 };
 

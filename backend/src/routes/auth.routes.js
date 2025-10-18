@@ -8,6 +8,7 @@ import {
   changePassword,
   getAddresses,
   getAllCustomers,
+  getCustomerById,
   verifyMagicLink,
   setupPassword,
   sendPasswordResetLink,
@@ -44,6 +45,7 @@ router.post('/login', loginValidation, validateRequest, login);
 router.get('/me', authenticate, getMe);
 router.get('/addresses', authenticate, getAddresses);
 router.get('/customers', authenticate, authorize('admin'), getAllCustomers);
+router.get('/customers/:customerId', authenticate, authorize('admin'), getCustomerById);
 router.put('/profile', authenticate, updateProfile);
 router.put('/password', authenticate, changePassword);
 
