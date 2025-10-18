@@ -5,7 +5,7 @@
       <div class="flex items-center justify-between mb-6">
         <div>
           <h1 class="text-3xl font-bold text-gray-900">Customer Details</h1>
-          <p class="text-gray-600 mt-1">{{ customer.user.name }} ({{ customer.user.email }})</p>
+          <p class="text-gray-600 mt-1">{{ customer.user?.name || 'Unknown' }} ({{ customer.user?.email || 'No email' }})</p>
         </div>
         <router-link to="/admin/customers" class="btn btn-secondary">
           ← Back to Customers
@@ -68,21 +68,21 @@
             </div>
             <div>
               <label class="text-sm font-medium text-gray-500">Account Status</label>
-              <span :class="customer.user.is_active ? 'text-green-600' : 'text-red-600'" class="font-medium">
-                {{ customer.user.is_active ? 'Active' : 'Inactive' }}
+              <span :class="customer.user?.is_active ? 'text-green-600' : 'text-red-600'" class="font-medium">
+                {{ customer.user?.is_active ? 'Active' : 'Inactive' }}
               </span>
             </div>
             <div>
               <label class="text-sm font-medium text-gray-500">Email Verified</label>
-              <span :class="customer.user.email_verified ? 'text-green-600' : 'text-yellow-600'" class="font-medium">
-                {{ customer.user.email_verified ? 'Yes' : 'No' }}
+              <span :class="customer.user?.email_verified ? 'text-green-600' : 'text-yellow-600'" class="font-medium">
+                {{ customer.user?.email_verified ? 'Yes' : 'No' }}
               </span>
             </div>
             <div>
               <label class="text-sm font-medium text-gray-500">Member Since</label>
-              <p class="text-gray-900">{{ formatDate(customer.user.created_at) }}</p>
+              <p class="text-gray-900">{{ formatDate(customer.user?.created_at) }}</p>
             </div>
-            <div v-if="customer.user.last_login">
+            <div v-if="customer.user?.last_login">
               <label class="text-sm font-medium text-gray-500">Last Login</label>
               <p class="text-gray-900">{{ formatDate(customer.user.last_login) }}</p>
             </div>
@@ -256,7 +256,7 @@
         </div>
         <div class="p-6">
           <div class="bg-white rounded-lg border border-red-200 p-4">
-            <h3 class="text-lg font-semibold text-gray-900 mb-2">Delete Customer Account</h3>
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Deactivate Customer Account</h3>
             <p class="text-gray-600 mb-4">
               This will deactivate the customer account. The customer will no longer be able to log in, 
               but all order history and data will be preserved for record-keeping purposes.
@@ -279,7 +279,7 @@
               <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
               </svg>
-              Delete Customer Account
+              Deactivate Customer Account
             </button>
           </div>
         </div>
@@ -318,9 +318,9 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
             </svg>
           </div>
-          <h3 class="text-xl font-bold text-gray-900 mb-4 text-center">Delete Customer Account?</h3>
+          <h3 class="text-xl font-bold text-gray-900 mb-4 text-center">Deactivate Customer Account?</h3>
           <p class="text-gray-600 mb-4 text-center">
-            Are you sure you want to delete <strong>{{ customer.user.name }}</strong>'s account?
+            Are you sure you want to deactivate <strong>{{ customer.user.name }}</strong>'s account?
           </p>
           <div class="bg-red-50 border border-red-200 rounded p-3 mb-4">
             <p class="text-sm text-red-800">
@@ -357,7 +357,7 @@
               :disabled="!deleteConfirmed || deleting"
               class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {{ deleting ? 'Deleting...' : 'Delete Account' }}
+              {{ deleting ? 'Deactivating...' : 'Deactivate Account' }}
             </button>
           </div>
         </div>
@@ -421,15 +421,12 @@ const fetchCustomerDetails = async () => {
     loading.value = true
     const token = localStorage.getItem('token')
     
-    // Fetch customer details
-    const response = await axios.get(`${API_URL}/auth/customers`, {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { search: route.params.id }
+    // Fetch customer details using the customer detail endpoint
+    const response = await axios.get(`${API_URL}/auth/customers/${route.params.id}`, {
+      headers: { Authorization: `Bearer ${token}` }
     })
     
-    // Find the specific customer
-    const customers = response.data.customers
-    customer.value = customers.find(c => c.id === route.params.id || c.user.id === route.params.id)
+    customer.value = response.data.customer
     
     if (customer.value) {
       fetchOrders()
@@ -509,7 +506,12 @@ const copyResetLink = async () => {
 }
 
 const formatDate = (date) => {
-  return format(new Date(date), 'PPP')
+  if (!date) return 'Never'
+  try {
+    return format(new Date(date), 'PPP')
+  } catch (error) {
+    return 'Invalid date'
+  }
 }
 
 const formatStatus = (status) => {
@@ -559,8 +561,8 @@ const handleDeleteCustomer = async () => {
     // Redirect to customers list
     window.location.href = '/admin/customers'
   } catch (error) {
-    console.error('Error deleting customer:', error)
-    alert('Failed to delete customer account. Please try again.')
+    console.error('Error deactivating customer:', error)
+    alert('Failed to deactivate customer account. Please try again.')
   } finally {
     deleting.value = false
     showDeleteModal.value = false

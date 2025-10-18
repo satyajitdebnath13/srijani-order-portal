@@ -113,7 +113,9 @@ export const login = async (req, res) => {
     // Check if user is active
     if (!user.is_active) {
       logger.warn(`Login attempt for inactive account: ${email}`);
-      return res.status(403).json({ error: 'Account is inactive' });
+      return res.status(403).json({ 
+        error: 'Account has been deactivated. Please contact support for assistance.' 
+      });
     }
 
     // Update last login
@@ -277,9 +279,9 @@ export const getAllCustomers = async (req, res) => {
     // Build user where clause for search and status
     const userWhereClause = {};
     if (search) {
-      userWhereClause[db.Sequelize.Op.or] = [
-        { name: { [db.Sequelize.Op.iLike]: `%${search}%` } },
-        { email: { [db.Sequelize.Op.iLike]: `%${search}%` } }
+      userWhereClause[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } }
       ];
     }
     
@@ -619,7 +621,7 @@ export const deleteCustomer = async (req, res) => {
     logger.info(`Customer soft deleted: ${user.email} by admin: ${req.user.email}`);
 
     res.json({
-      message: 'Customer account deactivated successfully',
+      message: 'Customer account has been deactivated successfully',
       user: {
         id: user.id,
         email: user.email,
@@ -628,8 +630,8 @@ export const deleteCustomer = async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error('Delete customer error:', error);
-    res.status(500).json({ error: 'Failed to delete customer' });
+    logger.error('Deactivate customer error:', error);
+    res.status(500).json({ error: 'Failed to deactivate customer account' });
   }
 };
 

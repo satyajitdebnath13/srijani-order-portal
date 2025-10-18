@@ -154,7 +154,13 @@ export const authAPI = {
   getMe: () => api.get('/auth/me'),
   getProfile: () => api.get('/auth/me'),
   getAddresses: () => api.get('/auth/addresses'),
-  getAllCustomers: (params) => api.get('/auth/customers', { params }),
+  getAllCustomers: (params) => api.get('/auth/customers', { 
+    params,
+    headers: {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    }
+  }),
   updateProfile: (data) => api.put('/auth/profile', data),
   changePassword: (data) => api.put('/auth/password', data),
   deleteCustomer: (userId) => api.delete(`/auth/customers/${userId}`),

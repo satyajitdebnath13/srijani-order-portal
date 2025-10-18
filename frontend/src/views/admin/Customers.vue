@@ -165,12 +165,17 @@
                   €{{ customer.total_spent || 0 }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                    Active
+                  <span 
+                    :class="customer.user?.is_active === true
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-red-100 text-red-800'"
+                    class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                  >
+                    {{ customer.user?.is_active === true ? 'Active' : 'Inactive' }}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <router-link :to="`/admin/customers/${customer.user.id}`" class="text-blue-600 hover:text-blue-900 mr-3">
+                  <router-link :to="`/admin/customers/${customer.id}`" class="text-blue-600 hover:text-blue-900 mr-3">
                     View Details
                   </router-link>
                 </td>
@@ -184,7 +189,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { onBeforeRouteUpdate } from 'vue-router'
 import { authAPI } from '@/services/api'
 
 const customers = ref([])
@@ -197,7 +203,7 @@ const stats = ref({
 
 const filters = ref({
   search: '',
-  status: 'active', // Default to showing only active customers
+  status: '', // Default to showing all customers (active and inactive)
   sortBy: 'created_at'
 })
 
@@ -210,7 +216,14 @@ const getInitials = (name) => {
 const loadCustomers = async () => {
   try {
     loading.value = true
-    const response = await authAPI.getAllCustomers(filters.value)
+    
+    // Add timestamp to prevent caching
+    const filtersWithTimestamp = {
+      ...filters.value,
+      _t: Date.now()
+    }
+    
+    const response = await authAPI.getAllCustomers(filtersWithTimestamp)
     customers.value = response.data.customers
     stats.value = response.data.stats
   } catch (error) {
@@ -227,7 +240,24 @@ const loadCustomers = async () => {
   }
 }
 
+// Refresh data when page becomes visible again (e.g., returning from customer detail)
+const handleVisibilityChange = () => {
+  if (!document.hidden) {
+    loadCustomers()
+  }
+}
+
 onMounted(() => {
+  loadCustomers()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
+
+// Listen for route changes to refresh data when coming back from customer detail
+onBeforeRouteUpdate(() => {
   loadCustomers()
 })
 </script>

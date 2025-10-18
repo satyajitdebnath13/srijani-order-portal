@@ -33,6 +33,7 @@ app.use(helmet());
 // CORS configuration
 const allowedOrigins = [
   'http://localhost:3000',
+  'http://localhost:3001', // Additional dev port
   'http://localhost:5173', // Vite dev server
   'https://srijani-order-portal.vercel.app'
 ];
@@ -55,7 +56,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cache-Control', 'Pragma']
 }));
 
 // Rate limiting
