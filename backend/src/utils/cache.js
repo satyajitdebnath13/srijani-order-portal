@@ -27,7 +27,16 @@ class CacheManager {
     try {
       // Check if Redis is available in production
       if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL && !process.env.REDIS_HOST) {
-        logger.warn('Redis not configured for production. Using in-memory cache fallback.');
+        logger.info('Redis not configured for production. Using in-memory cache fallback.');
+        this.useRedis = false;
+        this.fallbackCache = new InMemoryCache();
+        this.isConnected = true;
+        return;
+      }
+
+      // If no Redis configuration, use fallback immediately
+      if (!process.env.REDIS_URL && !process.env.REDIS_HOST) {
+        logger.info('No Redis configuration found. Using in-memory cache fallback.');
         this.useRedis = false;
         this.fallbackCache = new InMemoryCache();
         this.isConnected = true;
@@ -72,16 +81,34 @@ class CacheManager {
         this.isConnected = true;
       });
 
+      // Reduce error logging frequency to prevent spam
+      let errorCount = 0;
+      const maxErrorsPerMinute = 5;
+      const errorResetInterval = 60000; // 1 minute
+
       this.redis.on('error', (error) => {
-        logger.error('Redis connection error:', error);
+        errorCount++;
+        
+        // Only log errors occasionally to prevent spam
+        if (errorCount <= maxErrorsPerMinute) {
+          logger.error('Redis connection error:', error);
+        } else if (errorCount === maxErrorsPerMinute + 1) {
+          logger.warn(`Redis connection errors suppressed (${maxErrorsPerMinute} errors logged). Using in-memory cache fallback.`);
+        }
+        
         this.isConnected = false;
+        
         // Fallback to in-memory cache
         if (!this.fallbackCache) {
-          logger.warn('Falling back to in-memory cache due to Redis error');
           this.useRedis = false;
           this.fallbackCache = new InMemoryCache();
           this.isConnected = true;
         }
+        
+        // Reset error count after interval
+        setTimeout(() => {
+          errorCount = 0;
+        }, errorResetInterval);
       });
 
       this.redis.on('close', () => {
@@ -89,7 +116,6 @@ class CacheManager {
         this.isConnected = false;
         // Fallback to in-memory cache
         if (!this.fallbackCache) {
-          logger.warn('Falling back to in-memory cache due to Redis disconnection');
           this.useRedis = false;
           this.fallbackCache = new InMemoryCache();
           this.isConnected = true;
@@ -106,6 +132,12 @@ class CacheManager {
     } catch (error) {
       logger.error('Failed to initialize Redis:', error);
       this.isConnected = false;
+      // Ensure fallback is available
+      if (!this.fallbackCache) {
+        this.useRedis = false;
+        this.fallbackCache = new InMemoryCache();
+        this.isConnected = true;
+      }
     }
   }
 
