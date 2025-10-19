@@ -1,144 +1,20 @@
 /**
- * Redis Caching Layer for Performance Optimization
+ * In-Memory Caching Layer for Performance Optimization
  * 
- * This module provides high-performance caching capabilities to reduce database load
+ * This module provides high-performance in-memory caching capabilities to reduce database load
  * and improve response times across the application.
  */
 
-import Redis from 'ioredis';
 import InMemoryCache from './inMemoryCache.js';
 import logger from './logger.js';
 
 class CacheManager {
   constructor() {
-    this.redis = null;
-    this.fallbackCache = null;
-    this.isConnected = false;
+    this.cache = new InMemoryCache();
+    this.isConnected = true;
     this.defaultTTL = 3600; // 1 hour default TTL
-    this.useRedis = true;
     
-    this.initializeRedis();
-  }
-
-  /**
-   * Initialize Redis connection with optimized configuration
-   */
-  initializeRedis() {
-    try {
-      // Check if Redis is available in production
-      if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL && !process.env.REDIS_HOST) {
-        logger.info('Redis not configured for production. Using in-memory cache fallback.');
-        this.useRedis = false;
-        this.fallbackCache = new InMemoryCache();
-        this.isConnected = true;
-        return;
-      }
-
-      // If no Redis configuration, use fallback immediately
-      if (!process.env.REDIS_URL && !process.env.REDIS_HOST) {
-        logger.info('No Redis configuration found. Using in-memory cache fallback.');
-        this.useRedis = false;
-        this.fallbackCache = new InMemoryCache();
-        this.isConnected = true;
-        return;
-      }
-
-      const redisConfig = {
-        // Use REDIS_URL for production (Render, Railway, etc.)
-        ...(process.env.REDIS_URL ? { url: process.env.REDIS_URL } : {
-          host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT) || 6379,
-          password: process.env.REDIS_PASSWORD || undefined,
-          db: parseInt(process.env.REDIS_DB) || 0,
-        }),
-        
-        // Performance optimizations
-        retryDelayOnFailover: 100,
-        maxRetriesPerRequest: 3,
-        lazyConnect: true,
-        keepAlive: 30000,
-        connectTimeout: 10000,
-        commandTimeout: 5000,
-        
-        // Connection pool settings
-        family: 4,
-        retryDelayOnClusterDown: 300,
-        enableReadyCheck: false,
-        maxRetriesPerRequest: null,
-        
-        // Memory optimization
-        maxmemoryPolicy: 'allkeys-lru',
-        
-        // Retry configuration
-        retryDelayOnFailover: 100,
-        enableOfflineQueue: false
-      };
-
-      this.redis = new Redis(redisConfig);
-
-      this.redis.on('connect', () => {
-        logger.info('Redis connected successfully');
-        this.isConnected = true;
-      });
-
-      // Reduce error logging frequency to prevent spam
-      let errorCount = 0;
-      const maxErrorsPerMinute = 5;
-      const errorResetInterval = 60000; // 1 minute
-
-      this.redis.on('error', (error) => {
-        errorCount++;
-        
-        // Only log errors occasionally to prevent spam
-        if (errorCount <= maxErrorsPerMinute) {
-          logger.error('Redis connection error:', error);
-        } else if (errorCount === maxErrorsPerMinute + 1) {
-          logger.warn(`Redis connection errors suppressed (${maxErrorsPerMinute} errors logged). Using in-memory cache fallback.`);
-        }
-        
-        this.isConnected = false;
-        
-        // Fallback to in-memory cache
-        if (!this.fallbackCache) {
-          this.useRedis = false;
-          this.fallbackCache = new InMemoryCache();
-          this.isConnected = true;
-        }
-        
-        // Reset error count after interval
-        setTimeout(() => {
-          errorCount = 0;
-        }, errorResetInterval);
-      });
-
-      this.redis.on('close', () => {
-        logger.warn('Redis connection closed');
-        this.isConnected = false;
-        // Fallback to in-memory cache
-        if (!this.fallbackCache) {
-          this.useRedis = false;
-          this.fallbackCache = new InMemoryCache();
-          this.isConnected = true;
-        }
-      });
-
-      // Test connection
-      this.redis.ping().then(() => {
-        logger.info('Redis ping successful');
-      }).catch((error) => {
-        logger.error('Redis ping failed:', error);
-      });
-
-    } catch (error) {
-      logger.error('Failed to initialize Redis:', error);
-      this.isConnected = false;
-      // Ensure fallback is available
-      if (!this.fallbackCache) {
-        this.useRedis = false;
-        this.fallbackCache = new InMemoryCache();
-        this.isConnected = true;
-      }
-    }
+    logger.info('In-memory cache initialized');
   }
 
   /**
@@ -152,17 +28,12 @@ class CacheManager {
     }
 
     try {
-      if (this.useRedis && this.redis) {
-        const value = await this.redis.get(key);
-        if (value) {
-          logger.debug(`Cache hit for key: ${key}`);
-          return JSON.parse(value);
-        }
-        logger.debug(`Cache miss for key: ${key}`);
-        return null;
-      } else if (this.fallbackCache) {
-        return await this.fallbackCache.get(key);
+      const value = await this.cache.get(key);
+      if (value) {
+        logger.debug(`Cache hit for key: ${key}`);
+        return value;
       }
+      logger.debug(`Cache miss for key: ${key}`);
       return null;
     } catch (error) {
       logger.error(`Cache get error for key ${key}:`, error);
@@ -183,15 +54,9 @@ class CacheManager {
     }
 
     try {
-      if (this.useRedis && this.redis) {
-        const serializedValue = JSON.stringify(value);
-        await this.redis.setex(key, ttl, serializedValue);
-        logger.debug(`Cache set for key: ${key}, TTL: ${ttl}s`);
-        return true;
-      } else if (this.fallbackCache) {
-        return await this.fallbackCache.set(key, value, ttl);
-      }
-      return false;
+      const result = await this.cache.set(key, value, ttl);
+      logger.debug(`Cache set for key: ${key}, TTL: ${ttl}s`);
+      return result;
     } catch (error) {
       logger.error(`Cache set error for key ${key}:`, error);
       return false;
@@ -209,9 +74,9 @@ class CacheManager {
     }
 
     try {
-      await this.redis.del(key);
+      const result = await this.cache.del(key);
       logger.debug(`Cache deleted for key: ${key}`);
-      return true;
+      return result;
     } catch (error) {
       logger.error(`Cache delete error for key ${key}:`, error);
       return false;
@@ -229,9 +94,13 @@ class CacheManager {
     }
 
     try {
-      await this.redis.del(...keys);
+      let success = true;
+      for (const key of keys) {
+        const result = await this.cache.del(key);
+        if (!result) success = false;
+      }
       logger.debug(`Cache deleted for keys: ${keys.join(', ')}`);
-      return true;
+      return success;
     } catch (error) {
       logger.error(`Cache delete multiple error for keys ${keys.join(', ')}:`, error);
       return false;
@@ -249,8 +118,8 @@ class CacheManager {
     }
 
     try {
-      const exists = await this.redis.exists(key);
-      return exists === 1;
+      const value = await this.cache.get(key);
+      return value !== null;
     } catch (error) {
       logger.error(`Cache exists error for key ${key}:`, error);
       return false;
@@ -268,14 +137,14 @@ class CacheManager {
     }
 
     try {
-      const values = await this.redis.mget(...keys);
       const result = {};
       
-      keys.forEach((key, index) => {
-        if (values[index]) {
-          result[key] = JSON.parse(values[index]);
+      for (const key of keys) {
+        const value = await this.cache.get(key);
+        if (value !== null) {
+          result[key] = value;
         }
-      });
+      }
       
       logger.debug(`Cache mget for keys: ${keys.join(', ')}`);
       return result;
@@ -297,15 +166,15 @@ class CacheManager {
     }
 
     try {
-      const pipeline = this.redis.pipeline();
+      let success = true;
       
-      Object.entries(keyValuePairs).forEach(([key, value]) => {
-        pipeline.setex(key, ttl, JSON.stringify(value));
-      });
+      for (const [key, value] of Object.entries(keyValuePairs)) {
+        const result = await this.cache.set(key, value, ttl);
+        if (!result) success = false;
+      }
       
-      await pipeline.exec();
       logger.debug(`Cache mset for keys: ${Object.keys(keyValuePairs).join(', ')}`);
-      return true;
+      return success;
     } catch (error) {
       logger.error(`Cache mset error:`, error);
       return false;
@@ -323,10 +192,18 @@ class CacheManager {
     }
 
     try {
-      const keys = await this.redis.keys(pattern);
-      if (keys.length > 0) {
-        await this.redis.del(...keys);
-        logger.info(`Cache cleared for pattern: ${pattern}, ${keys.length} keys deleted`);
+      const stats = await this.cache.getStats();
+      const keys = Object.keys(stats.activeKeys || {});
+      const matchingKeys = keys.filter(key => key.includes(pattern));
+      
+      if (matchingKeys.length > 0) {
+        let success = true;
+        for (const key of matchingKeys) {
+          const result = await this.cache.del(key);
+          if (!result) success = false;
+        }
+        logger.info(`Cache cleared for pattern: ${pattern}, ${matchingKeys.length} keys deleted`);
+        return success;
       }
       return true;
     } catch (error) {
@@ -345,22 +222,12 @@ class CacheManager {
     }
 
     try {
-      if (this.useRedis && this.redis) {
-        const info = await this.redis.info('memory');
-        const keyspace = await this.redis.info('keyspace');
-        
-        return {
-          connected: true,
-          type: 'redis',
-          memory: info,
-          keyspace: keyspace,
-          uptime: await this.redis.uptime()
-        };
-      } else if (this.fallbackCache) {
-        return await this.fallbackCache.getStats();
-      }
-      
-      return { connected: false };
+      const stats = await this.cache.getStats();
+      return {
+        ...stats,
+        connected: true,
+        type: 'in-memory'
+      };
     } catch (error) {
       logger.error('Cache stats error:', error);
       return { connected: false, error: error.message };
@@ -368,13 +235,21 @@ class CacheManager {
   }
 
   /**
-   * Close Redis connection
+   * Clear all cache
+   * @returns {Promise<boolean>} - Success status
    */
-  async close() {
-    if (this.redis) {
-      await this.redis.quit();
-      this.isConnected = false;
-      logger.info('Redis connection closed');
+  async clear() {
+    if (!this.isConnected) {
+      return false;
+    }
+
+    try {
+      const result = await this.cache.clear();
+      logger.info('Cache cleared');
+      return result;
+    } catch (error) {
+      logger.error('Cache clear error:', error);
+      return false;
     }
   }
 }
