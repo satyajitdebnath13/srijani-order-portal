@@ -11,6 +11,7 @@ import logger from './utils/logger.js';
 import performanceMonitor from './utils/performanceMonitor.js';
 import cacheManager from './utils/cache.js';
 import queryCache from './utils/queryCache.js';
+import queryHelper from './utils/queryHelper.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 // Import routes
@@ -49,12 +50,16 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-// Compression middleware for better performance
+// Ultra-fast compression middleware
 app.use(compression({
-  level: 6,
-  threshold: 1024, // Only compress responses larger than 1KB
+  level: 1, // Fastest compression level
+  threshold: 512, // Compress responses larger than 512 bytes
   filter: (req, res) => {
     if (req.headers['x-no-compression']) {
+      return false;
+    }
+    // Skip compression for already compressed content
+    if (req.url.includes('.js') || req.url.includes('.css') || req.url.includes('.png') || req.url.includes('.jpg')) {
       return false;
     }
     return compression.filter(req, res);
@@ -95,22 +100,70 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cache-Control', 'Pragma']
 }));
 
-// Rate limiting
+// Ultra-fast rate limiting
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // Increased limit for speed
+  skipSuccessfulRequests: true, // Skip rate limiting for successful requests
+  skipFailedRequests: false,
+  keyGenerator: (req) => {
+    // Use IP + User-Agent for better distribution
+    return `${req.ip}-${req.get('User-Agent')}`;
+  },
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many requests' });
+  }
 });
 app.use('/api/', limiter);
 
-// Body parser middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Ultra-fast body parser middleware
+app.use(express.json({ 
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    // Pre-parse JSON for speed
+    try {
+      req.rawBody = buf;
+    } catch (e) {
+      // Ignore parsing errors for speed
+    }
+  }
+}));
+app.use(express.urlencoded({ 
+  extended: true, 
+  limit: '10mb',
+  parameterLimit: 1000 // Increase parameter limit for speed
+}));
 
 // Performance monitoring middleware
 app.use(performanceMonitor.requestMonitor());
 
-// Query caching middleware
-app.use(queryCache.cacheMiddleware(300)); // 5 minutes cache
+// Ultra-fast query caching middleware
+app.use(queryCache.cacheMiddleware(600)); // 10 minutes cache for speed
+
+// Ultra-fast response headers middleware
+app.use((req, res, next) => {
+  // Add ultra-fast caching headers
+  if (req.method === 'GET') {
+    res.set({
+      'Cache-Control': 'public, max-age=300', // 5 minutes cache
+      'ETag': `"${Date.now()}"`, // Simple ETag for speed
+      'Vary': 'Accept-Encoding',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'X-XSS-Protection': '1; mode=block'
+    });
+  }
+  
+  // Add performance headers
+  res.set({
+    'X-Powered-By': 'Srijani-Backend',
+    'X-Response-Time': Date.now(),
+    'Connection': 'keep-alive',
+    'Keep-Alive': 'timeout=5, max=1000'
+  });
+  
+  next();
+});
 
 // Health check endpoints
 app.get('/health', (req, res) => {
@@ -129,15 +182,20 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Performance monitoring endpoints
+// Ultra-fast performance monitoring endpoints
 app.get('/api/performance', async (req, res) => {
   try {
-    const metrics = performanceMonitor.getPerformanceReport();
-    const cacheStats = await cacheManager.getStats();
-    
+    const [metrics, cacheStats, queryStats] = await Promise.all([
+      Promise.resolve(performanceMonitor.getPerformanceReport()),
+      cacheManager.getStats(),
+      queryHelper.getPerformanceStats()
+    ]);
+
     res.json({
       ...metrics,
-      cache: cacheStats
+      cache: cacheStats,
+      queries: queryStats,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     logger.error('Error getting performance metrics:', error);
@@ -148,6 +206,27 @@ app.get('/api/performance', async (req, res) => {
 app.get('/api/performance/reset', (req, res) => {
   performanceMonitor.resetMetrics();
   res.json({ message: 'Performance metrics reset successfully' });
+});
+
+// Ultra-fast cache management endpoints
+app.get('/api/cache/stats', async (req, res) => {
+  try {
+    const stats = await cacheManager.getStats();
+    res.json(stats);
+  } catch (error) {
+    logger.error('Error getting cache stats:', error);
+    res.status(500).json({ error: 'Failed to get cache stats' });
+  }
+});
+
+app.post('/api/cache/clear', async (req, res) => {
+  try {
+    await cacheManager.clear();
+    res.json({ message: 'Cache cleared successfully' });
+  } catch (error) {
+    logger.error('Error clearing cache:', error);
+    res.status(500).json({ error: 'Failed to clear cache' });
+  }
 });
 
 // API Routes

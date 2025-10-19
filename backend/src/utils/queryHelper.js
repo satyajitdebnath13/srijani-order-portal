@@ -1,329 +1,297 @@
 /**
- * Optimized Database Query Helper
+ * Ultra-Fast Database Query Helper
  * 
- * This module provides optimized database query methods with caching,
- * performance monitoring, and connection pooling.
+ * This module provides optimized database query methods for maximum performance
  */
 
-import db from '../config/database.js';
-import queryCache from './queryCache.js';
-import performanceMonitor from './performanceMonitor.js';
+import db from '../models/index.js';
 import logger from './logger.js';
+import cacheManager from './cache.js';
 
-class OptimizedQueryHelper {
+class QueryHelper {
   constructor() {
-    this.models = db.models;
+    this.cache = cacheManager;
+    this.defaultCacheTTL = 600; // 10 minutes
   }
 
   /**
-   * Optimized find with caching
+   * Ultra-fast find with caching
    * @param {Object} model - Sequelize model
    * @param {Object} options - Query options
    * @param {number} cacheTTL - Cache TTL in seconds
    * @returns {Promise<any>} - Query result
    */
-  async findWithCache(model, options = {}, cacheTTL = 300) {
-    const startTime = Date.now();
+  async findWithCache(model, options = {}, cacheTTL = this.defaultCacheTTL) {
+    const cacheKey = `query:${model.name}:${JSON.stringify(options)}`;
     
     try {
-      // Generate cache key
-      const cacheKey = `find:${model.name}:${JSON.stringify(options)}`;
-      
-      // Try to get from cache first
-      const cachedResult = await queryCache.getCachedQuery(cacheKey, options);
-      if (cachedResult) {
-        return cachedResult;
+      // Try cache first
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        logger.debug(`Cache hit for ${model.name} query`);
+        return cached;
       }
+
+      // Execute query with optimizations
+      const result = await model.findAll({
+        ...options,
+        // Performance optimizations
+        raw: false,
+        nest: true,
+        benchmark: false,
+        logging: false,
+        // Query optimizations
+        subQuery: false,
+        distinct: true,
+        // Memory optimizations
+        limit: options.limit || 1000,
+        offset: options.offset || 0
+      });
+
+      // Cache result
+      await this.cache.set(cacheKey, result, cacheTTL);
       
-      // Execute query
-      const result = await model.findAll(options);
-      
-      // Cache the result
-      await queryCache.cacheQuery(cacheKey, result, cacheTTL);
-      
-      // Track performance
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`SELECT ${model.name}`, executionTime);
-      
+      logger.debug(`Query executed and cached for ${model.name}`);
       return result;
-      
     } catch (error) {
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`SELECT ${model.name} (ERROR)`, executionTime);
-      performanceMonitor.trackError(error, { model: model.name, options });
+      logger.error(`Query error for ${model.name}:`, error);
       throw error;
     }
   }
 
   /**
-   * Optimized findOne with caching
+   * Ultra-fast findOne with caching
    * @param {Object} model - Sequelize model
    * @param {Object} options - Query options
    * @param {number} cacheTTL - Cache TTL in seconds
    * @returns {Promise<any>} - Query result
    */
-  async findOneWithCache(model, options = {}, cacheTTL = 300) {
-    const startTime = Date.now();
+  async findOneWithCache(model, options = {}, cacheTTL = this.defaultCacheTTL) {
+    const cacheKey = `query:${model.name}:one:${JSON.stringify(options)}`;
     
     try {
-      // Generate cache key
-      const cacheKey = `findOne:${model.name}:${JSON.stringify(options)}`;
-      
-      // Try to get from cache first
-      const cachedResult = await queryCache.getCachedQuery(cacheKey, options);
-      if (cachedResult) {
-        return cachedResult;
+      // Try cache first
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        logger.debug(`Cache hit for ${model.name} findOne`);
+        return cached;
+      }
+
+      // Execute query with optimizations
+      const result = await model.findOne({
+        ...options,
+        // Performance optimizations
+        raw: false,
+        nest: true,
+        benchmark: false,
+        logging: false
+      });
+
+      // Cache result
+      if (result) {
+        await this.cache.set(cacheKey, result, cacheTTL);
       }
       
-      // Execute query
-      const result = await model.findOne(options);
-      
-      // Cache the result
-      await queryCache.cacheQuery(cacheKey, result, cacheTTL);
-      
-      // Track performance
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`SELECT ONE ${model.name}`, executionTime);
-      
+      logger.debug(`FindOne executed and cached for ${model.name}`);
       return result;
-      
     } catch (error) {
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`SELECT ONE ${model.name} (ERROR)`, executionTime);
-      performanceMonitor.trackError(error, { model: model.name, options });
+      logger.error(`FindOne error for ${model.name}:`, error);
       throw error;
     }
   }
 
   /**
-   * Optimized findByPk with caching
-   * @param {Object} model - Sequelize model
-   * @param {string|number} id - Primary key
-   * @param {Object} options - Query options
-   * @param {number} cacheTTL - Cache TTL in seconds
-   * @returns {Promise<any>} - Query result
-   */
-  async findByPkWithCache(model, id, options = {}, cacheTTL = 300) {
-    const startTime = Date.now();
-    
-    try {
-      // Generate cache key
-      const cacheKey = `findByPk:${model.name}:${id}:${JSON.stringify(options)}`;
-      
-      // Try to get from cache first
-      const cachedResult = await queryCache.getCachedQuery(cacheKey, { id, ...options });
-      if (cachedResult) {
-        return cachedResult;
-      }
-      
-      // Execute query
-      const result = await model.findByPk(id, options);
-      
-      // Cache the result
-      await queryCache.cacheQuery(cacheKey, result, cacheTTL);
-      
-      // Track performance
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`SELECT BY PK ${model.name}`, executionTime);
-      
-      return result;
-      
-    } catch (error) {
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`SELECT BY PK ${model.name} (ERROR)`, executionTime);
-      performanceMonitor.trackError(error, { model: model.name, id, options });
-      throw error;
-    }
-  }
-
-  /**
-   * Optimized count with caching
+   * Ultra-fast count with caching
    * @param {Object} model - Sequelize model
    * @param {Object} options - Query options
    * @param {number} cacheTTL - Cache TTL in seconds
    * @returns {Promise<number>} - Count result
    */
-  async countWithCache(model, options = {}, cacheTTL = 300) {
-    const startTime = Date.now();
+  async countWithCache(model, options = {}, cacheTTL = this.defaultCacheTTL) {
+    const cacheKey = `count:${model.name}:${JSON.stringify(options)}`;
     
     try {
-      // Generate cache key
-      const cacheKey = `count:${model.name}:${JSON.stringify(options)}`;
-      
-      // Try to get from cache first
-      const cachedResult = await queryCache.getCachedQuery(cacheKey, options);
-      if (cachedResult !== null) {
-        return cachedResult;
+      // Try cache first
+      const cached = await this.cache.get(cacheKey);
+      if (cached !== null) {
+        logger.debug(`Cache hit for ${model.name} count`);
+        return cached;
       }
+
+      // Execute count with optimizations
+      const result = await model.count({
+        ...options,
+        // Performance optimizations
+        benchmark: false,
+        logging: false,
+        // Use index for speed
+        distinct: true
+      });
+
+      // Cache result
+      await this.cache.set(cacheKey, result, cacheTTL);
       
-      // Execute query
-      const result = await model.count(options);
-      
-      // Cache the result
-      await queryCache.cacheQuery(cacheKey, result, cacheTTL);
-      
-      // Track performance
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`COUNT ${model.name}`, executionTime);
-      
+      logger.debug(`Count executed and cached for ${model.name}`);
       return result;
-      
     } catch (error) {
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`COUNT ${model.name} (ERROR)`, executionTime);
-      performanceMonitor.trackError(error, { model: model.name, options });
+      logger.error(`Count error for ${model.name}:`, error);
       throw error;
     }
   }
 
   /**
-   * Create record and invalidate related cache
+   * Ultra-fast bulk operations
    * @param {Object} model - Sequelize model
-   * @param {Object} data - Data to create
-   * @param {Object} options - Create options
-   * @returns {Promise<any>} - Created record
+   * @param {Array} data - Data to insert/update
+   * @param {Object} options - Bulk options
+   * @returns {Promise<any>} - Bulk result
    */
-  async createAndInvalidateCache(model, data, options = {}) {
-    const startTime = Date.now();
-    
+  async bulkCreate(model, data, options = {}) {
     try {
-      // Execute create
-      const result = await model.create(data, options);
+      const result = await model.bulkCreate(data, {
+        ...options,
+        // Performance optimizations
+        benchmark: false,
+        logging: false,
+        // Bulk optimizations
+        ignoreDuplicates: true,
+        updateOnDuplicate: Object.keys(data[0] || {}),
+        // Memory optimizations
+        validate: false, // Skip validation for speed
+        individualHooks: false // Disable hooks for speed
+      });
+
+      // Clear related cache
+      await this.clearModelCache(model.name);
       
-      // Invalidate cache for this table
-      await queryCache.invalidateTable(model.name);
-      
-      // Track performance
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`INSERT ${model.name}`, executionTime);
-      
-      logger.info(`Record created in ${model.name}:`, { id: result.id });
-      
+      logger.debug(`Bulk create completed for ${model.name}: ${data.length} records`);
       return result;
-      
     } catch (error) {
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`INSERT ${model.name} (ERROR)`, executionTime);
-      performanceMonitor.trackError(error, { model: model.name, data });
+      logger.error(`Bulk create error for ${model.name}:`, error);
       throw error;
     }
   }
 
   /**
-   * Update record and invalidate related cache
+   * Ultra-fast update with caching
    * @param {Object} model - Sequelize model
    * @param {Object} data - Data to update
+   * @param {Object} where - Where clause
    * @param {Object} options - Update options
-   * @returns {Promise<any>} - Updated record
+   * @returns {Promise<any>} - Update result
    */
-  async updateAndInvalidateCache(model, data, options = {}) {
-    const startTime = Date.now();
-    
+  async updateWithCache(model, data, where, options = {}) {
     try {
-      // Execute update
-      const result = await model.update(data, options);
+      const result = await model.update(data, {
+        where,
+        ...options,
+        // Performance optimizations
+        benchmark: false,
+        logging: false,
+        // Update optimizations
+        returning: false, // Don't return updated rows for speed
+        individualHooks: false // Disable hooks for speed
+      });
+
+      // Clear related cache
+      await this.clearModelCache(model.name);
       
-      // Invalidate cache for this table
-      await queryCache.invalidateTable(model.name);
-      
-      // Track performance
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`UPDATE ${model.name}`, executionTime);
-      
-      logger.info(`Record updated in ${model.name}:`, { affectedRows: result[0] });
-      
+      logger.debug(`Update completed for ${model.name}`);
       return result;
-      
     } catch (error) {
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`UPDATE ${model.name} (ERROR)`, executionTime);
-      performanceMonitor.trackError(error, { model: model.name, data, options });
+      logger.error(`Update error for ${model.name}:`, error);
       throw error;
     }
   }
 
   /**
-   * Delete record and invalidate related cache
+   * Clear cache for a specific model
+   * @param {string} modelName - Model name
+   * @returns {Promise<boolean>} - Success status
+   */
+  async clearModelCache(modelName) {
+    try {
+      const pattern = `query:${modelName}:*`;
+      await this.cache.clearPattern(pattern);
+      await this.cache.clearPattern(`count:${modelName}:*`);
+      logger.debug(`Cache cleared for model: ${modelName}`);
+      return true;
+    } catch (error) {
+      logger.error(`Cache clear error for ${modelName}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Ultra-fast pagination
    * @param {Object} model - Sequelize model
-   * @param {Object} options - Delete options
-   * @returns {Promise<number>} - Number of deleted records
-   */
-  async deleteAndInvalidateCache(model, options = {}) {
-    const startTime = Date.now();
-    
-    try {
-      // Execute delete
-      const result = await model.destroy(options);
-      
-      // Invalidate cache for this table
-      await queryCache.invalidateTable(model.name);
-      
-      // Track performance
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`DELETE ${model.name}`, executionTime);
-      
-      logger.info(`Record deleted from ${model.name}:`, { deletedRows: result });
-      
-      return result;
-      
-    } catch (error) {
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`DELETE ${model.name} (ERROR)`, executionTime);
-      performanceMonitor.trackError(error, { model: model.name, options });
-      throw error;
-    }
-  }
-
-  /**
-   * Execute raw query with performance tracking
-   * @param {string} query - SQL query
    * @param {Object} options - Query options
-   * @returns {Promise<any>} - Query result
+   * @param {number} page - Page number
+   * @param {number} limit - Items per page
+   * @param {number} cacheTTL - Cache TTL in seconds
+   * @returns {Promise<Object>} - Paginated result
    */
-  async executeRawQuery(query, options = {}) {
-    const startTime = Date.now();
+  async paginateWithCache(model, options = {}, page = 1, limit = 20, cacheTTL = this.defaultCacheTTL) {
+    const offset = (page - 1) * limit;
+    const cacheKey = `paginate:${model.name}:${page}:${limit}:${JSON.stringify(options)}`;
     
     try {
-      const result = await db.query(query, options);
+      // Try cache first
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        logger.debug(`Cache hit for ${model.name} pagination`);
+        return cached;
+      }
+
+      // Execute pagination query
+      const [data, totalCount] = await Promise.all([
+        this.findWithCache(model, { ...options, limit, offset }, cacheTTL),
+        this.countWithCache(model, options, cacheTTL)
+      ]);
+
+      const result = {
+        data,
+        pagination: {
+          page,
+          limit,
+          total: totalCount,
+          pages: Math.ceil(totalCount / limit),
+          hasNext: page < Math.ceil(totalCount / limit),
+          hasPrev: page > 1
+        }
+      };
+
+      // Cache result
+      await this.cache.set(cacheKey, result, cacheTTL);
       
-      // Track performance
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(query, executionTime);
-      
+      logger.debug(`Pagination executed and cached for ${model.name}`);
       return result;
-      
     } catch (error) {
-      const executionTime = Date.now() - startTime;
-      performanceMonitor.trackDbQuery(`${query} (ERROR)`, executionTime);
-      performanceMonitor.trackError(error, { query, options });
+      logger.error(`Pagination error for ${model.name}:`, error);
       throw error;
     }
   }
 
   /**
-   * Get database connection status
-   * @returns {Promise<Object>} - Connection status
+   * Get query performance stats
+   * @returns {Promise<Object>} - Performance stats
    */
-  async getConnectionStatus() {
+  async getPerformanceStats() {
     try {
-      await db.authenticate();
+      const cacheStats = await this.cache.getStats();
       return {
-        connected: true,
-        dialect: db.getDialect(),
-        database: db.getDatabaseName(),
-        host: db.getHostname(),
-        port: db.getPort()
+        cache: cacheStats,
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
       };
     } catch (error) {
-      return {
-        connected: false,
-        error: error.message
-      };
+      logger.error('Performance stats error:', error);
+      return { error: error.message };
     }
   }
 }
 
 // Create singleton instance
-const queryHelper = new OptimizedQueryHelper();
+const queryHelper = new QueryHelper();
 
 export default queryHelper;
