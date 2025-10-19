@@ -109,7 +109,7 @@
               </span>
             </div>
             <p class="text-xs sm:text-sm text-gray-600">{{ formatDate(order.created_at) }}</p>
-            <p class="text-sm sm:text-base font-medium text-gray-900 mt-1">€{{ parseFloat(order.total_amount).toFixed(2) }}</p>
+            <p class="text-sm sm:text-base font-medium text-gray-900 mt-1">{{ formatPrice(order.total_amount) }}</p>
           </div>
           <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mt-3 sm:mt-4">
             <router-link :to="`/orders/${order.id}`" class="btn btn-secondary btn-sm text-center">
@@ -128,7 +128,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed } from 'vue'
+import { formatPrice } from '@/utils/currency'
 import { useAuthStore } from '@/stores/auth';
 import { ordersAPI, supportAPI } from '@/services/api';
 import { format } from 'date-fns';

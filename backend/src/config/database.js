@@ -37,15 +37,32 @@ const sequelize = process.env.DATABASE_URL
       dialectOptions: config.dialectOptions,
       logging: process.env.NODE_ENV === 'development' ? console.log : false,
       pool: {
-        max: 5,
-        min: 0,
-        acquire: 30000,
-        idle: 10000
+        max: parseInt(process.env.DB_POOL_MAX) || 20,        // Increased from 5
+        min: parseInt(process.env.DB_POOL_MIN) || 5,         // Increased from 0
+        acquire: parseInt(process.env.DB_POOL_ACQUIRE) || 60000,  // Increased from 30000
+        idle: parseInt(process.env.DB_POOL_IDLE) || 30000,        // Increased from 10000
+        evict: parseInt(process.env.DB_POOL_EVICT) || 1000,        // New: evict idle connections
+        handleDisconnects: true,                                  // New: handle disconnections
+        retry: {
+          max: 3,                                                 // New: retry failed connections
+          timeout: 5000
+        }
       },
       define: {
         timestamps: true,
         underscored: true,
         freezeTableName: true
+      },
+      // Performance optimizations
+      benchmark: process.env.NODE_ENV === 'development',
+      retry: {
+        max: 3,
+        timeout: 5000
+      },
+      // Query optimization
+      query: {
+        raw: false,
+        nest: true
       }
     })
   : new Sequelize(
@@ -58,15 +75,32 @@ const sequelize = process.env.DATABASE_URL
         dialect: config.dialect,
         logging: process.env.NODE_ENV === 'development' ? console.log : false,
         pool: {
-          max: 5,
-          min: 0,
-          acquire: 30000,
-          idle: 10000
+          max: parseInt(process.env.DB_POOL_MAX) || 20,        // Increased from 5
+          min: parseInt(process.env.DB_POOL_MIN) || 5,         // Increased from 0
+          acquire: parseInt(process.env.DB_POOL_ACQUIRE) || 60000,  // Increased from 30000
+          idle: parseInt(process.env.DB_POOL_IDLE) || 30000,        // Increased from 10000
+          evict: parseInt(process.env.DB_POOL_EVICT) || 1000,        // New: evict idle connections
+          handleDisconnects: true,                                  // New: handle disconnections
+          retry: {
+            max: 3,                                                 // New: retry failed connections
+            timeout: 5000
+          }
         },
         define: {
           timestamps: true,
           underscored: true,
           freezeTableName: true
+        },
+        // Performance optimizations
+        benchmark: process.env.NODE_ENV === 'development',
+        retry: {
+          max: 3,
+          timeout: 5000
+        },
+        // Query optimization
+        query: {
+          raw: false,
+          nest: true
         }
       }
     );

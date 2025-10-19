@@ -1,7 +1,7 @@
 import express from 'express';
-import { body, param } from 'express-validator';
 import { authenticate } from '../middleware/auth.js';
-import { validateRequest } from '../middleware/validateRequest.js';
+import { validateRequest as customValidateRequest } from '../utils/inputValidation.js';
+import { videoValidationSchemas } from '../validation/videoSchemas.js';
 import {
   getUploadUrl,
   saveVideoToOrder,
@@ -15,8 +15,7 @@ const router = express.Router();
 router.get(
   '/orders/:orderId/upload-url',
   authenticate,
-  param('orderId').isUUID().withMessage('Invalid order ID'),
-  validateRequest,
+  customValidateRequest(videoValidationSchemas.getUploadUrl),
   getUploadUrl
 );
 
@@ -24,12 +23,7 @@ router.get(
 router.post(
   '/orders/:orderId/video',
   authenticate,
-  [
-    param('orderId').isUUID().withMessage('Invalid order ID'),
-    body('videoUrl').notEmpty().withMessage('Video URL is required'),
-    body('videoType').isIn(['file', 'link']).withMessage('Video type must be either "file" or "link"')
-  ],
-  validateRequest,
+  customValidateRequest(videoValidationSchemas.saveVideoToOrder),
   saveVideoToOrder
 );
 
@@ -37,8 +31,7 @@ router.post(
 router.post(
   '/orders/:orderId/upload',
   authenticate,
-  param('orderId').isUUID().withMessage('Invalid order ID'),
-  validateRequest,
+  customValidateRequest(videoValidationSchemas.uploadVideoFile),
   uploadVideoFile
 );
 
@@ -46,8 +39,7 @@ router.post(
 router.get(
   '/orders/:orderId/video',
   authenticate,
-  param('orderId').isUUID().withMessage('Invalid order ID'),
-  validateRequest,
+  customValidateRequest(videoValidationSchemas.getOrderVideo),
   getOrderVideo
 );
 

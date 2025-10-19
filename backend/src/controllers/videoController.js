@@ -1,6 +1,7 @@
 import db from '../models/index.js';
 import logger from '../utils/logger.js';
 import { generateSignedUploadUrl, validateVideoLink, uploadVideo } from '../services/videoService.js';
+import { validateRequest } from '../utils/inputValidation.js';
 import multer from 'multer';
 import path from 'path';
 
@@ -84,8 +85,30 @@ export const saveVideoToOrder = async (req, res) => {
     if (videoType === 'link') {
       const validation = validateVideoLink(videoUrl);
       if (!validation.valid) {
-        return res.status(400).json({ error: validation.error });
+        logger.warn('Video URL validation failed:', { 
+          error: validation.error, 
+          url: videoUrl,
+          orderId,
+          userId: req.user.id 
+        });
+        return res.status(400).json({ 
+          error: validation.error,
+          securityFlags: validation.securityFlags || []
+        });
       }
+
+      // Log security flags if any
+      if (validation.securityFlags && validation.securityFlags.length > 0) {
+        logger.warn('Video URL has security flags:', { 
+          flags: validation.securityFlags, 
+          url: videoUrl,
+          orderId,
+          userId: req.user.id 
+        });
+      }
+
+      // Use sanitized URL
+      videoUrl = validation.url;
     }
 
     // Update order with video info
@@ -95,17 +118,23 @@ export const saveVideoToOrder = async (req, res) => {
       video_uploaded_at: new Date()
     });
 
-    // Log activity
+    // Log activity with enhanced security information
+    const activityDetails = {
+      video_type: videoType,
+      order_number: order.order_number,
+      platform: videoType === 'link' ? validation?.platform : 'cloudinary',
+      video_id: videoType === 'link' ? validation?.videoId : null,
+      security_flags: videoType === 'link' ? (validation?.securityFlags || []) : []
+    };
+
     await ActivityLog.create({
       user_id: req.user.id,
       action: 'package_video_uploaded',
       entity_type: 'order',
       entity_id: order.id,
-      details: {
-        video_type: videoType,
-        order_number: order.order_number
-      },
-      ip_address: req.ip
+      details: activityDetails,
+      ip_address: req.ip,
+      user_agent: req.get('User-Agent')
     });
 
     logger.info(`Package video uploaded for order ${order.order_number} by user ${req.user.email}`);
@@ -132,32 +161,58 @@ export const saveVideoToOrder = async (req, res) => {
 export const uploadVideoFile = async (req, res) => {
   upload(req, res, async (err) => {
     if (err) {
-      logger.error('Video upload error:', err);
+      logger.error('Video upload multer error:', {
+        error: err.message,
+        code: err.code,
+        field: err.field
+      });
       return res.status(400).json({ error: err.message });
     }
 
     try {
       const { orderId } = req.params;
 
+      logger.info(`Starting video upload for order ${orderId}`, {
+        userId: req.user.id,
+        userEmail: req.user.email,
+        fileSize: req.file?.size,
+        fileType: req.file?.mimetype
+      });
+
       if (!req.file) {
+        logger.error('No video file provided in request');
         return res.status(400).json({ error: 'No video file provided' });
       }
 
       // Verify order exists
       const order = await Order.findByPk(orderId);
       if (!order) {
+        logger.error(`Order not found: ${orderId}`);
         return res.status(404).json({ error: 'Order not found' });
       }
 
       // Check authorization
       if (req.user.role !== 'admin' && order.customer_id !== req.user.customerProfile?.id) {
+        logger.error(`Unauthorized video upload attempt for order ${orderId} by user ${req.user.email}`);
         return res.status(403).json({ error: 'Unauthorized' });
       }
+
+      logger.info(`Uploading video to Cloudinary for order ${order.order_number}`, {
+        fileSize: req.file.size,
+        fileName: req.file.originalname,
+        fileType: req.file.mimetype
+      });
 
       // Upload to Cloudinary
       const result = await uploadVideo(req.file.buffer, {
         folder: 'package_videos',
         public_id: `order_${orderId}_${Date.now()}`
+      });
+
+      logger.info(`Cloudinary upload successful for order ${order.order_number}`, {
+        cloudinaryUrl: result.url,
+        publicId: result.publicId,
+        fileSize: result.size
       });
 
       // Update order
@@ -177,12 +232,17 @@ export const uploadVideoFile = async (req, res) => {
           video_type: 'file',
           file_size: result.size,
           duration: result.duration,
-          order_number: order.order_number
+          order_number: order.order_number,
+          cloudinary_url: result.url,
+          public_id: result.publicId
         },
         ip_address: req.ip
       });
 
-      logger.info(`Package video uploaded for order ${order.order_number}`);
+      logger.info(`Package video uploaded successfully for order ${order.order_number}`, {
+        videoUrl: result.url,
+        orderId: order.id
+      });
 
       res.json({
         message: 'Video uploaded successfully',
@@ -194,8 +254,16 @@ export const uploadVideoFile = async (req, res) => {
         }
       });
     } catch (error) {
-      logger.error('Upload video file error:', error);
-      res.status(500).json({ error: 'Failed to upload video' });
+      logger.error('Upload video file error:', {
+        error: error.message,
+        stack: error.stack,
+        orderId: req.params.orderId,
+        userId: req.user?.id
+      });
+      res.status(500).json({ 
+        error: 'Failed to upload video',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   });
 };

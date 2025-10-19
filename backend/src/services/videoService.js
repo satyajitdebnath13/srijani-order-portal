@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary';
 import logger from '../utils/logger.js';
+import { validateVideoUrl } from '../utils/urlValidation.js';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -7,6 +8,19 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
+
+// Validate Cloudinary configuration
+const validateCloudinaryConfig = () => {
+  const required = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
+  const missing = required.filter(key => !process.env[key]);
+  
+  if (missing.length > 0) {
+    logger.error(`Missing Cloudinary environment variables: ${missing.join(', ')}`);
+    throw new Error(`Missing Cloudinary configuration: ${missing.join(', ')}`);
+  }
+  
+  logger.info('Cloudinary configuration validated successfully');
+};
 
 /**
  * Generate a signed upload URL for direct frontend uploads
@@ -16,8 +30,9 @@ cloudinary.config({
  */
 export const generateSignedUploadUrl = async (folder = 'package_videos', publicId = null) => {
   try {
+    validateCloudinaryConfig();
+    
     const timestamp = Math.round(new Date().getTime() / 1000);
-    const uploadPreset = 'package_opening_videos'; // You can create this in Cloudinary dashboard
     
     const params = {
       timestamp,
@@ -28,9 +43,11 @@ export const generateSignedUploadUrl = async (folder = 'package_videos', publicI
       ...(publicId && { public_id: publicId })
     };
 
+    logger.info(`Generating signed upload URL for folder: ${folder}, publicId: ${publicId || 'auto-generated'}`);
+
     const signature = cloudinary.utils.api_sign_request(params, process.env.CLOUDINARY_API_SECRET);
 
-    return {
+    const result = {
       signature,
       timestamp,
       cloudName: process.env.CLOUDINARY_CLOUD_NAME,
@@ -38,9 +55,12 @@ export const generateSignedUploadUrl = async (folder = 'package_videos', publicI
       folder,
       uploadUrl: `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/video/upload`
     };
+
+    logger.info('Signed upload URL generated successfully');
+    return result;
   } catch (error) {
     logger.error('Error generating signed upload URL:', error);
-    throw new Error('Failed to generate upload URL');
+    throw new Error(`Failed to generate upload URL: ${error.message}`);
   }
 };
 
@@ -52,6 +72,14 @@ export const generateSignedUploadUrl = async (folder = 'package_videos', publicI
  */
 export const uploadVideo = async (filePath, options = {}) => {
   try {
+    validateCloudinaryConfig();
+    
+    logger.info(`Starting video upload to Cloudinary with options:`, {
+      folder: options.folder || 'package_videos',
+      publicId: options.public_id || 'auto-generated',
+      fileSize: filePath.length || 'unknown'
+    });
+
     const result = await cloudinary.uploader.upload(filePath, {
       resource_type: 'video',
       folder: options.folder || 'package_videos',
@@ -60,7 +88,13 @@ export const uploadVideo = async (filePath, options = {}) => {
       ...options
     });
 
-    logger.info(`Video uploaded successfully: ${result.public_id}`);
+    logger.info(`Video uploaded successfully:`, {
+      publicId: result.public_id,
+      url: result.secure_url,
+      format: result.format,
+      size: result.bytes,
+      duration: result.duration
+    });
 
     return {
       url: result.secure_url,
@@ -73,8 +107,12 @@ export const uploadVideo = async (filePath, options = {}) => {
       createdAt: result.created_at
     };
   } catch (error) {
-    logger.error('Error uploading video to Cloudinary:', error);
-    throw new Error('Failed to upload video');
+    logger.error('Error uploading video to Cloudinary:', {
+      error: error.message,
+      stack: error.stack,
+      options: options
+    });
+    throw new Error(`Failed to upload video: ${error.message}`);
   }
 };
 
@@ -104,37 +142,41 @@ export const deleteVideo = async (publicId) => {
  */
 export const validateVideoLink = (url) => {
   try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase();
-
-    // YouTube
-    if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
-      return { valid: true, type: 'youtube', url };
+    logger.info(`Validating video URL: ${url}`);
+    
+    const validation = validateVideoUrl(url);
+    
+    if (!validation.isValid) {
+      logger.warn(`Video URL validation failed: ${validation.error}`);
+      return { 
+        valid: false, 
+        error: validation.error,
+        securityFlags: validation.securityFlags || []
+      };
     }
 
-    // Google Drive
-    if (hostname.includes('drive.google.com')) {
-      return { valid: true, type: 'google_drive', url };
+    // Log security flags if any
+    if (validation.securityFlags && validation.securityFlags.length > 0) {
+      logger.warn(`Video URL has security flags: ${validation.securityFlags.join(', ')}`);
     }
 
-    // Vimeo
-    if (hostname.includes('vimeo.com')) {
-      return { valid: true, type: 'vimeo', url };
-    }
-
-    // Cloudinary (our own uploads)
-    if (hostname.includes('cloudinary.com')) {
-      return { valid: true, type: 'cloudinary', url };
-    }
-
-    // Other valid URLs (must be https)
-    if (urlObj.protocol === 'https:') {
-      return { valid: true, type: 'external', url };
-    }
-
-    return { valid: false, error: 'Unsupported video link. Please use YouTube, Google Drive, Vimeo, or upload directly.' };
+    logger.info(`Video URL validation successful: ${validation.platform} - ${validation.videoId}`);
+    
+    return { 
+      valid: true, 
+      type: validation.videoType,
+      platform: validation.platform,
+      videoId: validation.videoId,
+      url: validation.sanitizedUrl,
+      securityFlags: validation.securityFlags || []
+    };
   } catch (error) {
-    return { valid: false, error: 'Invalid URL format' };
+    logger.error('Error validating video URL:', error);
+    return { 
+      valid: false, 
+      error: 'Invalid URL format or validation error',
+      securityFlags: ['validation_error']
+    };
   }
 };
 

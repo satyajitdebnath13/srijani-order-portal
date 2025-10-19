@@ -33,7 +33,7 @@
                   </div>
                 </div>
                 <div class="text-right">
-                  <p class="text-sm font-medium text-gray-900">${{ item.price }}</p>
+                  <p class="text-sm font-medium text-gray-900">{{ formatPrice(item.price) }}</p>
                 </div>
               </div>
             </div>
@@ -41,15 +41,15 @@
             <div class="mt-6 pt-6 border-t border-gray-200">
               <div class="flex justify-between text-sm">
                 <span class="text-gray-600">Subtotal</span>
-                <span class="text-gray-900">${{ order.subtotal }}</span>
+                <span class="text-gray-900">{{ formatPrice(order.subtotal) }}</span>
               </div>
               <div class="flex justify-between text-sm mt-2">
                 <span class="text-gray-600">Shipping</span>
-                <span class="text-gray-900">${{ order.shipping }}</span>
+                <span class="text-gray-900">{{ formatPrice(order.shipping) }}</span>
               </div>
               <div class="flex justify-between text-lg font-medium mt-4">
                 <span class="text-gray-900">Total</span>
-                <span class="text-gray-900">${{ order.total }}</span>
+                <span class="text-gray-900">{{ formatPrice(order.total) }}</span>
               </div>
             </div>
           </div>
@@ -178,6 +178,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { formatPrice } from '@/utils/currency'
 import { useRoute } from 'vue-router'
 import { ordersAPI } from '@/services/api'
 import VideoUpload from '@/components/VideoUpload.vue'

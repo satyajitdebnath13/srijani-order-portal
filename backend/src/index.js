@@ -1,12 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import db from './models/index.js';
 import logger from './utils/logger.js';
+import performanceMonitor from './utils/performanceMonitor.js';
+import cacheManager from './utils/cache.js';
+import queryCache from './utils/queryCache.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 // Import routes
@@ -28,7 +32,34 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false
+}));
+
+// Compression middleware for better performance
+app.use(compression({
+  level: 6,
+  threshold: 1024, // Only compress responses larger than 1KB
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
 
 // CORS configuration
 const allowedOrigins = [
@@ -70,14 +101,11 @@ app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request logging middleware
-app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.path}`, {
-    ip: req.ip,
-    userAgent: req.headers['user-agent']
-  });
-  next();
-});
+// Performance monitoring middleware
+app.use(performanceMonitor.requestMonitor());
+
+// Query caching middleware
+app.use(queryCache.cacheMiddleware(300)); // 5 minutes cache
 
 // Health check endpoints
 app.get('/health', (req, res) => {
@@ -94,6 +122,27 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
+});
+
+// Performance monitoring endpoints
+app.get('/api/performance', async (req, res) => {
+  try {
+    const metrics = performanceMonitor.getPerformanceReport();
+    const cacheStats = await cacheManager.getStats();
+    
+    res.json({
+      ...metrics,
+      cache: cacheStats
+    });
+  } catch (error) {
+    logger.error('Error getting performance metrics:', error);
+    res.status(500).json({ error: 'Failed to get performance metrics' });
+  }
+});
+
+app.get('/api/performance/reset', (req, res) => {
+  performanceMonitor.resetMetrics();
+  res.json({ message: 'Performance metrics reset successfully' });
 });
 
 // API Routes

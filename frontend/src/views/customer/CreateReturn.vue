@@ -142,7 +142,7 @@
                   {{ item.product_name }}
                 </label>
                 <p class="text-sm text-gray-600 mt-1">
-                  Quantity: {{ item.quantity }} × ${{ item.unit_price }} = ${{ (item.quantity * item.unit_price).toFixed(2) }}
+                  Quantity: {{ item.quantity }} × {{ formatPrice(item.unit_price) }} = {{ formatPrice(item.quantity * parseFloat(item.unit_price)) }}
                 </p>
                 
                 <!-- Reason Selection (shown when item is selected) -->
@@ -214,12 +214,12 @@
                 <span class="font-medium text-gray-900">{{ getOrderItem(item.order_item_id).product_name }}</span>
                 <span class="text-gray-600"> - {{ formatReason(item.return_reason) }}</span>
               </div>
-              <span class="text-gray-900 font-medium">${{ (getOrderItem(item.order_item_id).quantity * getOrderItem(item.order_item_id).unit_price).toFixed(2) }}</span>
+              <span class="text-gray-900 font-medium">{{ formatPrice(getOrderItem(item.order_item_id).quantity * parseFloat(getOrderItem(item.order_item_id).unit_price)) }}</span>
             </li>
           </ul>
           <div class="mt-3 pt-3 border-t border-gray-200 flex justify-between font-semibold">
             <span>Total Return Amount:</span>
-            <span>${{ calculateTotalReturnAmount() }}</span>
+            <span>{{ formatPrice(calculateTotalReturnAmount()) }}</span>
           </div>
         </div>
 
@@ -295,6 +295,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { formatPrice } from '@/utils/currency'
 import { useRouter } from 'vue-router'
 import { ordersAPI, returnsAPI } from '@/services/api'
 import { format } from 'date-fns'

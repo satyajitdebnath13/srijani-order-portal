@@ -37,11 +37,11 @@
                 <div v-for="item in order.items" :key="item.id" class="border border-gray-200 rounded-lg p-3">
                   <div class="flex justify-between items-start mb-2">
                     <h4 class="font-medium text-gray-900">{{ item.product_name }}</h4>
-                    <span class="text-sm font-medium text-gray-900">€{{ parseFloat(item.subtotal).toFixed(2) }}</span>
+                    <span class="text-sm font-medium text-gray-900">{{ formatPrice(item.subtotal) }}</span>
                   </div>
                   <div class="text-sm text-gray-600 space-y-1">
                     <div>Quantity: {{ item.quantity }}</div>
-                    <div>Unit Price: €{{ parseFloat(item.unit_price).toFixed(2) }}</div>
+                    <div>Unit Price: {{ formatPrice(item.unit_price) }}</div>
                     <div v-if="item.sku">SKU: {{ item.sku }}</div>
                     <div v-if="item.size">Size: {{ item.size }}</div>
                     <div v-if="item.color">Color: {{ item.color }}</div>
@@ -79,7 +79,7 @@
                 <div class="border-t border-gray-200 pt-3 mt-3">
                   <div class="flex justify-between font-medium text-lg">
                     <span>Total Amount:</span>
-                    <span>€{{ parseFloat(order.total_amount).toFixed(2) }}</span>
+                    <span>{{ formatPrice(order.total_amount) }}</span>
                   </div>
                 </div>
               </div>
@@ -255,6 +255,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { formatPrice } from '@/utils/currency'
 import { useRoute, useRouter } from 'vue-router'
 import { ordersAPI } from '@/services/api'
 
